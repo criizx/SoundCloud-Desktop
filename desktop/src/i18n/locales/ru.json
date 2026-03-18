@@ -75,7 +75,9 @@
   "library": {
     "likedTracks": "Любимые треки",
     "likedPlaylists": "Любимые плейлисты",
-    "yourPlaylists": "Ваши плейлисты"
+    "yourPlaylists": "Ваши плейлисты",
+    "history": "История",
+    "historyEmpty": "История пуста"
   },
   "home": {
     "goodMorning": "Доброе утро",
@@ -109,6 +111,12 @@
     "bgLoadError": "Не удалось загрузить изображение",
     "bgOpacity": "Прозрачность фона",
     "resetDefaults": "Сбросить",
+    "playback": "Воспроизведение",
+    "trackTransition": "Переход между треками",
+    "transitionOff": "Без перехода",
+    "transitionFade": "Fade",
+    "transitionDuration": "Длительность перехода",
+    "seconds": "сек",
     "account": "Аккаунт"
   },
   "common": {

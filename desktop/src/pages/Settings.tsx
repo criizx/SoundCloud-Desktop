@@ -425,6 +425,69 @@ const ThemeSection = React.memo(function ThemeSection() {
   );
 });
 
+/* ── Playback Section ────────────────────────────── */
+
+const PlaybackSection = React.memo(function PlaybackSection() {
+  const { t } = useTranslation();
+  const transitionMode = useSettingsStore((s) => s.transitionMode);
+  const transitionDuration = useSettingsStore((s) => s.transitionDuration);
+  const setTransitionMode = useSettingsStore((s) => s.setTransitionMode);
+  const setTransitionDuration = useSettingsStore((s) => s.setTransitionDuration);
+
+  const modes = [
+    { id: 'off', label: t('settings.transitionOff') },
+    { id: 'fade', label: t('settings.transitionFade') },
+  ] as const;
+
+  return (
+    <section className="bg-white/[0.02] border border-white/[0.05] backdrop-blur-[60px] rounded-3xl p-6 shadow-xl space-y-5">
+      <h3 className="text-[15px] font-bold text-white/80 tracking-tight">{t('settings.playback')}</h3>
+
+      <div className="space-y-3">
+        <label className="text-[13px] text-white/50 font-medium">{t('settings.trackTransition')}</label>
+        <div className="flex gap-2">
+          {modes.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setTransitionMode(m.id)}
+              className={`flex-1 py-2 rounded-xl text-[12px] font-semibold transition-all duration-200 cursor-pointer border ${
+                transitionMode === m.id
+                  ? 'bg-accent/20 text-accent border-accent/30'
+                  : 'bg-white/[0.03] text-white/40 border-white/[0.06] hover:text-white/70 hover:bg-white/[0.06]'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {transitionMode !== 'off' && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-[13px] text-white/50 font-medium">
+              {t('settings.transitionDuration')}
+            </label>
+            <span className="text-[12px] text-white/30 tabular-nums">
+              {transitionDuration} {t('settings.seconds')}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={10}
+            step={1}
+            value={transitionDuration}
+            onChange={(e) => setTransitionDuration(Number(e.target.value))}
+            className="w-full accent-[var(--color-accent)] h-1 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg"
+          />
+        </div>
+      )}
+    </section>
+  );
+});
+
 /* ── Account Section ────────────────────────────────────── */
 
 const AccountSection = React.memo(function AccountSection() {
@@ -456,6 +519,7 @@ export function Settings() {
       <h1 className="text-3xl font-extrabold text-white tracking-tight">{t('settings.title')}</h1>
       <CacheSection />
       <ThemeSection />
+      <PlaybackSection />
       <AccountSection />
     </div>
   );

@@ -26,6 +26,7 @@ import {
   heart11,
   Instagram,
   LinkIcon,
+  ListPlus,
   Loader2,
   MapPin,
   Music,
@@ -38,6 +39,7 @@ import {
 import { useTrackPlay } from '../lib/useTrackPlay';
 import { useAuthStore } from '../stores/auth';
 import type { Track } from '../stores/player';
+import { usePlayerStore } from '../stores/player';
 
 /* ── Helpers ──────────────────────────────────────────────── */
 
@@ -133,9 +135,15 @@ function FollowBtn({ userUrn }: { userUrn: string }) {
 
 const TrackRow = React.memo(
   ({ track, index, queue }: { track: Track; index: number; queue: Track[] }) => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { isThis, isThisPlaying, togglePlay } = useTrackPlay(track, queue);
     const cover = art(track.artwork_url, 't200x200');
+
+    const handleAddToQueue = useCallback((e: React.MouseEvent) => {
+      e.stopPropagation();
+      usePlayerStore.getState().addToQueueNext([track]);
+    }, [track]);
 
     return (
       <div
@@ -213,6 +221,15 @@ const TrackRow = React.memo(
             </span>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={handleAddToQueue}
+          className="opacity-0 group-hover:opacity-100 w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-white/80 hover:bg-white/[0.08] transition-all duration-200 shrink-0"
+          title={t('player.addToQueue')}
+        >
+          <ListPlus size={16} />
+        </button>
 
         {/* Duration */}
         <span className="text-[12px] text-white/30 tabular-nums font-medium shrink-0 w-12 text-right">

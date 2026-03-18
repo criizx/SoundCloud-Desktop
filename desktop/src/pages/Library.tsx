@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { PlaylistCard } from '../components/music/PlaylistCard';
@@ -23,11 +23,13 @@ import {
   pauseWhite14,
   playBlack20ml1,
   playWhite14,
+  Trash2,
   User,
   Users,
 } from '../lib/icons';
 import { useTrackPlay } from '../lib/useTrackPlay';
 import { useAuthStore } from '../stores/auth';
+import { useHistoryStore } from '../stores/history';
 import type { Track } from '../stores/player';
 import { usePlayerStore } from '../stores/player';
 
@@ -48,17 +50,16 @@ const LibraryTrackRow = React.memo(
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { isThis, isThisPlaying, togglePlay: baseToggle } = useTrackPlay(track, queue);
-    const addToQueueNext = usePlayerStore((s) => s.addToQueueNext);
 
-    const togglePlay = () => {
+    const togglePlay = useCallback(() => {
       baseToggle();
       if (!isThis && onPlay) onPlay();
-    };
+    }, [baseToggle, isThis, onPlay]);
 
-    const handleAddToQueue = (e: React.MouseEvent) => {
+    const handleAddToQueue = useCallback((e: React.MouseEvent) => {
       e.stopPropagation();
-      addToQueueNext([track]);
-    };
+      usePlayerStore.getState().addToQueueNext([track]);
+    }, [track]);
 
     const cover = art(track.artwork_url, 't200x200');
 
@@ -461,11 +462,42 @@ const PlaylistsTab = React.memo(function PlaylistsTab() {
   );
 });
 
-/* ── Main Page ────────────────────────────────────────────── */
+const HistoryTab = React.memo(function HistoryTab() {
+  const { t } = useTranslation();
+  const { tracks, clear } = useHistoryStore();
+
+  return (
+    <div className="min-h-[400px]">
+      {tracks.length > 0 && (
+        <div className="flex justify-end mb-3">
+          <button
+            type="button"
+            onClick={clear}
+            className="h-7 px-2.5 rounded-lg text-[11px] text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all duration-150 cursor-pointer flex items-center gap-1.5"
+          >
+            <Trash2 size={12} />
+            {t('player.clearQueue')}
+          </button>
+        </div>
+      )}
+      <div className="flex flex-col gap-1">
+        {tracks.length === 0 ? (
+          <div className="py-20 text-center text-white/20">{t('library.historyEmpty')}</div>
+        ) : (
+          tracks.map((track, i) => (
+            <LibraryTrackRow key={`${track.urn}-${i}`} track={track} index={i} queue={tracks} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+});
+
+
 
 export const Library = React.memo(() => {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'playlists' | 'likes' | 'following'>('likes');
+  const [activeTab, setActiveTab] = useState<'playlists' | 'likes' | 'following' | 'history'>('likes');
   const user = useAuthStore((s) => s.user);
 
   const onTabLikes = React.useCallback(() => setActiveTab('likes'), []);
@@ -475,6 +507,7 @@ export const Library = React.memo(() => {
     { id: 'playlists', label: t('search.playlists') },
     { id: 'likes', label: t('library.likedTracks') },
     { id: 'following', label: t('nav.following') },
+    { id: 'history', label: t('library.history') },
   ] as const;
 
   if (!user) return null;
@@ -506,6 +539,7 @@ export const Library = React.memo(() => {
       {activeTab === 'likes' && <LikesTab />}
       {activeTab === 'following' && <FollowingTab />}
       {activeTab === 'playlists' && <PlaylistsTab />}
+      {activeTab === 'history' && <HistoryTab />}
     </div>
   );
 });

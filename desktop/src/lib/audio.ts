@@ -1,6 +1,8 @@
 import { Howl } from 'howler';
+import { useHistoryStore } from '../stores/history';
 import type { Track } from '../stores/player';
 import { usePlayerStore } from '../stores/player';
+import { useSettingsStore } from '../stores/settings';
 import { api, streamUrl } from './api';
 import { fetchAndCacheTrack, getCacheFilePath, getCacheUrl, isCached } from './cache';
 import { art } from './formatters';
@@ -17,13 +19,11 @@ function notify() {
   for (const l of listeners) l();
 }
 
-/** Subscribe to audio time changes (for useSyncExternalStore) */
 export function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
-/** Read current playback position directly from Howl */
 export function getCurrentTime(): number {
   if (!currentHowl) return 0;
   const t = currentHowl.seek();
@@ -39,12 +39,11 @@ export function getDuration(): number {
   return fallbackDuration;
 }
 
-/** Seek audio to position in seconds */
 export function seek(seconds: number) {
   if (currentHowl) {
     currentHowl.seek(seconds);
     notify();
-    // Delay SMTC update so Howler settles to actual position
+    // delay SMTC update so Howler settles to actual position
     setTimeout(() => {
       updateMediaSessionPosition();
       lastMediaSessionSync = performance.now();
@@ -104,15 +103,22 @@ function stopProgressLoop() {
   }
 }
 
-function createHowl(src: string, urn: string, onFail?: () => void): Howl {
-  return new Howl({
+function createHowl(src: string, urn: string, fadeIn: boolean, onFail?: () => void): Howl {
+  let howlRef: Howl;
+  let fadedIn = false;
+  howlRef = new Howl({
     src: [src],
     html5: true,
     format: ['mp3'],
-    volume: toHowlerVolume(usePlayerStore.getState().volume),
+    volume: fadeIn ? 0 : toHowlerVolume(usePlayerStore.getState().volume),
     onplay: () => {
       if (currentUrn === urn && !usePlayerStore.getState().isPlaying) {
         usePlayerStore.getState().resume();
+      }
+      if (!fadedIn && fadeIn && currentUrn === urn) {
+        fadedIn = true;
+        const { transitionDuration } = useSettingsStore.getState();
+        howlRef.fade(0, toHowlerVolume(usePlayerStore.getState().volume), transitionDuration * 1000);
       }
       startProgressLoop();
       updateMediaSessionState(true);
@@ -144,10 +150,13 @@ function createHowl(src: string, urn: string, onFail?: () => void): Howl {
       onFail ? onFail() : usePlayerStore.getState().pause();
     },
   });
+  return howlRef;
 }
 
 async function loadTrack(track: Track) {
+  useHistoryStore.getState().push(track);
   destroyHowl();
+
   currentUrn = track.urn;
   const urn = track.urn;
 
@@ -158,28 +167,27 @@ async function loadTrack(track: Track) {
   if (currentUrn !== urn) return;
 
   const httpUrl = streamUrl(urn);
+  const willPlay = usePlayerStore.getState().isPlaying;
+  const { transitionMode } = useSettingsStore.getState();
+  const fadeIn = willPlay && transitionMode === 'fade';
 
   const playHowl = (howl: Howl) => {
     currentHowl = howl;
-    if (usePlayerStore.getState().isPlaying) howl.play();
+    if (willPlay) howl.play();
   };
 
   const fallbackToStream = () => {
     if (currentUrn !== urn) return;
     destroyHowl();
-    playHowl(createHowl(httpUrl, urn));
+    playHowl(createHowl(httpUrl, urn, false));
   };
 
   if (cachedPath) {
     const cacheUrl = getCacheUrl(urn);
-    if (cacheUrl) {
-      playHowl(createHowl(cacheUrl, urn, fallbackToStream));
-    } else {
-      playHowl(createHowl(httpUrl, urn));
-    }
+    playHowl(createHowl(cacheUrl ?? httpUrl, urn, fadeIn, cacheUrl ? fallbackToStream : undefined));
   } else {
-    playHowl(createHowl(httpUrl, urn));
-    fetchAndCacheTrack(urn).catch(() => {});
+    playHowl(createHowl(httpUrl, urn, fadeIn));
+    fetchAndCacheTrack(urn).catch(() => { });
   }
 }
 
@@ -222,8 +230,8 @@ usePlayerStore.subscribe((state, prev) => {
     if (state.isPlaying) {
       if (!currentHowl && state.currentTrack) {
         void loadTrack(state.currentTrack);
-      } else {
-        currentHowl?.play();
+      } else if (currentHowl && !currentHowl.playing()) {
+        currentHowl.play();
       }
     } else {
       currentHowl?.pause();
@@ -231,7 +239,7 @@ usePlayerStore.subscribe((state, prev) => {
   }
 
   if (state.volume !== prev.volume && currentHowl) {
-    currentHowl.volume(toHowlerVolume(state.volume));
+    currentHowl.fade(currentHowl.volume(), toHowlerVolume(state.volume), 200);
   }
 });
 
@@ -239,10 +247,8 @@ usePlayerStore.subscribe((state, prev) => {
 
 function updateMediaSession(track: Track) {
   if (!('mediaSession' in navigator)) return;
-
   const artwork500 = art(track.artwork_url, 't500x500');
   const artwork128 = art(track.artwork_url, 't120x120');
-
   navigator.mediaSession.metadata = new MediaMetadata({
     title: track.title,
     artist: track.user.username,
@@ -276,15 +282,9 @@ if ('mediaSession' in navigator) {
   ms.setActionHandler('pause', () => usePlayerStore.getState().pause());
   ms.setActionHandler('nexttrack', () => usePlayerStore.getState().next());
   ms.setActionHandler('previoustrack', () => handlePrev());
-  ms.setActionHandler('seekto', (d) => {
-    if (d.seekTime != null) seek(d.seekTime);
-  });
-  ms.setActionHandler('seekforward', (d) => {
-    seek(Math.min(getCurrentTime() + (d.seekOffset ?? 10), getDuration()));
-  });
-  ms.setActionHandler('seekbackward', (d) => {
-    seek(Math.max(getCurrentTime() - (d.seekOffset ?? 10), 0));
-  });
+  ms.setActionHandler('seekto', (d) => { if (d.seekTime != null) seek(d.seekTime); });
+  ms.setActionHandler('seekforward', (d) => { seek(Math.min(getCurrentTime() + (d.seekOffset ?? 10), getDuration())); });
+  ms.setActionHandler('seekbackward', (d) => { seek(Math.max(getCurrentTime() - (d.seekOffset ?? 10), 0)); });
 }
 
 /* ── Autoplay ────────────────────────────────────────────────── */
@@ -294,7 +294,6 @@ let autoplayLoading = false;
 async function autoplayRelated(lastTrack: Track) {
   if (autoplayLoading) return;
   autoplayLoading = true;
-
   try {
     const { queue } = usePlayerStore.getState();
     const existingUrns = new Set(queue.map((t) => t.urn));
@@ -303,7 +302,6 @@ async function autoplayRelated(lastTrack: Track) {
     );
     const fresh = res.collection.filter((t) => !existingUrns.has(t.urn));
     if (fresh.length === 0) return;
-
     usePlayerStore.getState().addToQueue(fresh);
     usePlayerStore.getState().next();
   } catch (e) {
@@ -328,10 +326,8 @@ export function preloadTrack(urn: string) {
       if (!hit && activePreloads < MAX_CONCURRENT_PRELOADS) {
         activePreloads++;
         fetchAndCacheTrack(urn)
-          .catch(() => {})
-          .finally(() => {
-            activePreloads--;
-          });
+          .catch(() => { })
+          .finally(() => { activePreloads--; });
       }
     });
   }, 500);
@@ -344,7 +340,7 @@ export function preloadQueue() {
     if (idx < queue.length) {
       const urn = queue[idx].urn;
       isCached(urn).then((hit) => {
-        if (!hit) fetchAndCacheTrack(urn).catch(() => {});
+        if (!hit) fetchAndCacheTrack(urn).catch(() => { });
       });
     }
   }

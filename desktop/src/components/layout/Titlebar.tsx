@@ -1,17 +1,18 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Disc3, Minus, Square, X } from '../../lib/icons';
+import { ChevronLeft, ChevronRight, Disc3 } from '../../lib/icons';
+
+const isMac = navigator.userAgent.includes('Mac');
 
 const NavButtons = React.memo(() => {
   const navigate = useNavigate();
   const location = useLocation();
-
   // track history length to enable/disable (basic heuristic)
   const canGoBack = location.key !== 'default';
 
   return (
-    <div className="flex items-center gap-0.5 ml-2">
+    <div className="flex items-center gap-0.5">
       <button
         type="button"
         disabled={!canGoBack}
@@ -32,43 +33,32 @@ const NavButtons = React.memo(() => {
 });
 
 export const Titlebar = React.memo(() => {
-  const minimize = () => getCurrentWindow().minimize();
-  const toggleMaximize = () => getCurrentWindow().toggleMaximize();
-  const close = () => getCurrentWindow().close();
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!isMac) return;
+    const win = getCurrentWindow();
+    win.isFullscreen().then(setIsFullscreen);
+    const unlisten = win.onResized(() => {
+      win.isFullscreen().then(setIsFullscreen);
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
 
   return (
     <div
-      className="h-10 flex items-center justify-between px-4 select-none shrink-0 border-b border-white/[0.04]"
+      className="h-10 flex items-center px-4 select-none shrink-0 border-b border-white/[0.04]"
       data-tauri-drag-region
     >
+      {/* spacer for macOS traffic lights — hidden in fullscreen */}
+      {isMac && !isFullscreen && <div className="w-[70px] shrink-0" data-tauri-drag-region />}
+
       <div className="flex items-center gap-1.5" data-tauri-drag-region>
         <Disc3 size={14} className="text-accent" strokeWidth={2} />
         <span className="text-[11px] font-semibold tracking-tight text-white/30">SoundCloud</span>
-        <NavButtons />
-      </div>
-
-      <div className="flex items-center">
-        <button
-          type="button"
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-white/50 hover:bg-white/[0.04] transition-all duration-150 cursor-pointer"
-          onClick={minimize}
-        >
-          <Minus size={13} />
-        </button>
-        <button
-          type="button"
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-white/50 hover:bg-white/[0.04] transition-all duration-150 cursor-pointer"
-          onClick={toggleMaximize}
-        >
-          <Square size={10} />
-        </button>
-        <button
-          type="button"
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 cursor-pointer"
-          onClick={close}
-        >
-          <X size={13} />
-        </button>
+        <div className="ml-1">
+          <NavButtons />
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { preloadTrack } from '../../lib/audio';
@@ -18,13 +18,12 @@ export const TrackCard = React.memo(
     const { t } = useTranslation();
     const navigate = useNavigate();
     const { isThisPlaying, togglePlay } = useTrackPlay(track, queue);
-    const addToQueueNext = usePlayerStore((s) => s.addToQueueNext);
     const artwork = art(track.artwork_url, 't300x300');
 
-    const handleAddToQueue = (e: React.MouseEvent) => {
+    const handleAddToQueue = useCallback((e: React.MouseEvent) => {
       e.stopPropagation();
-      addToQueueNext([track]);
-    };
+      usePlayerStore.getState().addToQueueNext([track]);
+    }, [track]);
 
     return (
       <div className="group relative" onMouseEnter={() => preloadTrack(track.urn)}>

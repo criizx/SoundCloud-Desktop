@@ -24,6 +24,7 @@ import {
   Hash as _Hash,
   Headphones as _Headphones,
   Heart as _Heart,
+  History as _History,
   Home as _Home,
   Library as _Library,
   Link as _Link,
@@ -94,6 +95,7 @@ export const GripVertical = memo(_GripVertical);
 export const Hash = memo(_Hash);
 export const Headphones = memo(_Headphones);
 export const Heart = memo(_Heart);
+export const History = memo(_History);
 export const Home = memo(_Home);
 export const Instagram = memo(({ size, className }: { size?: number; className?: string }) => (
   <SimpleIcon icon={siInstagram} size={size} className={className} />

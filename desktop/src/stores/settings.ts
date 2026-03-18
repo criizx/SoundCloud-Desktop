@@ -7,10 +7,14 @@ export interface SettingsState {
   backgroundImage: string;
   backgroundOpacity: number;
   glassBlur: number;
+  transitionMode: 'off' | 'fade';
+  transitionDuration: number;
   setAccentColor: (color: string) => void;
   setBackgroundImage: (url: string) => void;
   setBackgroundOpacity: (opacity: number) => void;
   setGlassBlur: (blur: number) => void;
+  setTransitionMode: (mode: 'off' | 'fade') => void;
+  setTransitionDuration: (duration: number) => void;
   resetTheme: () => void;
 }
 
@@ -19,6 +23,8 @@ const DEFAULTS = {
   backgroundImage: '',
   backgroundOpacity: 0.15,
   glassBlur: 40,
+  transitionMode: 'fade' as const,
+  transitionDuration: 3,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -29,6 +35,8 @@ export const useSettingsStore = create<SettingsState>()(
       setBackgroundImage: (backgroundImage) => set({ backgroundImage }),
       setBackgroundOpacity: (backgroundOpacity) => set({ backgroundOpacity }),
       setGlassBlur: (glassBlur) => set({ glassBlur }),
+      setTransitionMode: (transitionMode) => set({ transitionMode }),
+      setTransitionDuration: (transitionDuration) => set({ transitionDuration }),
       resetTheme: () => set(DEFAULTS),
     }),
     {
@@ -39,6 +47,8 @@ export const useSettingsStore = create<SettingsState>()(
         backgroundImage: s.backgroundImage,
         backgroundOpacity: s.backgroundOpacity,
         glassBlur: s.glassBlur,
+        transitionMode: s.transitionMode,
+        transitionDuration: s.transitionDuration,
       }),
     },
   ),

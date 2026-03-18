@@ -74,7 +74,9 @@
   "library": {
     "likedTracks": "Liked Tracks",
     "likedPlaylists": "Liked Playlists",
-    "yourPlaylists": "Your Playlists"
+    "yourPlaylists": "Your Playlists",
+    "history": "History",
+    "historyEmpty": "No listening history yet"
   },
   "home": {
     "goodMorning": "Good morning",
@@ -108,6 +110,12 @@
     "bgLoadError": "Failed to load image",
     "bgOpacity": "Background opacity",
     "resetDefaults": "Reset to defaults",
+    "playback": "Playback",
+    "trackTransition": "Track transition",
+    "transitionOff": "Off",
+    "transitionFade": "Fade",
+    "transitionDuration": "Transition duration",
+    "seconds": "sec",
     "account": "Account"
   },
   "common": {

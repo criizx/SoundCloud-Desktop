@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +14,7 @@ import {
   Heart,
   headphones9,
   heart9,
+  ListPlus,
   ListMusic,
   Loader2,
   musicIcon12,
@@ -91,6 +93,11 @@ const TrackRow = React.memo(
     const { isThis, isThisPlaying, togglePlay } = useTrackPlay(track, queue);
     const cover = art(track.artwork_url, 't200x200');
 
+    const handleAddToQueue = useCallback((e: React.MouseEvent) => {
+      e.stopPropagation();
+      usePlayerStore.getState().addToQueueNext([track]);
+    }, [track]);
+
     return (
       <div
         className={`group flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-200 ease-[var(--ease-apple)] ${
@@ -168,6 +175,14 @@ const TrackRow = React.memo(
         <span className="text-[11px] text-white/25 tabular-nums font-medium shrink-0 w-10 text-right">
           {dur(track.duration)}
         </span>
+
+        <button
+          type="button"
+          onClick={handleAddToQueue}
+          className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-white/30 hover:text-white/80 hover:bg-white/[0.08] transition-all duration-200 shrink-0"
+        >
+          <ListPlus size={15} />
+        </button>
       </div>
     );
   },

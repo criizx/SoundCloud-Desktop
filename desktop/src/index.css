@@ -153,6 +153,24 @@ body,
   border-color: rgba(255, 255, 255, 0.1);
 }
 
+/* ── Fullscreen player background ───────────────────────── */
+@keyframes fs-drift {
+  0%   { transform: scale(1.4) rotate(0deg) translate(0px, 0px); }
+  25%  { transform: scale(1.45) rotate(2deg) translate(12px, -8px); }
+  50%  { transform: scale(1.4) rotate(-1deg) translate(-8px, 10px); }
+  75%  { transform: scale(1.45) rotate(3deg) translate(6px, -4px); }
+  100% { transform: scale(1.4) rotate(0deg) translate(0px, 0px); }
+}
+
+.fs-bg-playing {
+  animation: fs-drift 18s ease-in-out infinite;
+}
+
+.fs-bg-paused {
+  transform: scale(1.4);
+  transition: transform 1.5s ease-out;
+}
+
 /* ── Synced lyrics lines ─────────────────────────────────── */
 .lyric-line {
   cursor: pointer;

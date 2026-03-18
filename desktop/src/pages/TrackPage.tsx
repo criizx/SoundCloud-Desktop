@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CopyLinkButton } from '../components/ui/CopyLinkButton';
@@ -23,6 +23,7 @@ import {
   Hash,
   Headphones,
   Heart,
+  ListPlus,
   Loader2,
   MessageCircle,
   Music,
@@ -235,9 +236,15 @@ const CommentForm = React.memo(({ trackUrn }: { trackUrn: string }) => {
 
 const RelatedRow = React.memo(
   ({ track, queue }: { track: Track; queue: Track[] }) => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { isThis, isThisPlaying, togglePlay } = useTrackPlay(track, queue);
     const cover = art(track.artwork_url, 't200x200');
+
+    const handleAddToQueue = useCallback((e: React.MouseEvent) => {
+      e.stopPropagation();
+      usePlayerStore.getState().addToQueueNext([track]);
+    }, [track]);
 
     return (
       <div
@@ -294,6 +301,15 @@ const RelatedRow = React.memo(
             </p>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={handleAddToQueue}
+          className="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-white/30 hover:text-white/80 hover:bg-white/[0.08] transition-all duration-200 shrink-0"
+          title={t('player.addToQueue')}
+        >
+          <ListPlus size={14} />
+        </button>
       </div>
     );
   },
