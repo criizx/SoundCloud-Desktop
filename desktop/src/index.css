@@ -13,6 +13,8 @@
   --color-accent: #ff5500;
   --color-accent-hover: #ff6a1a;
   --color-accent-glow: rgba(255, 85, 0, 0.2);
+  --color-accent-selection: rgba(255, 85, 0, 0.3);
+  --color-accent-contrast: #ffffff;
 
   --font-sans: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --ease-apple: cubic-bezier(0.16, 1, 0.3, 1);
@@ -74,6 +76,11 @@ body,
   border-color: rgba(255, 255, 255, 0.1);
 }
 
+.glass-flat {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 /* ── Shimmer ───────────────────────────────────────────────── */
 @keyframes shimmer {
   0% {
@@ -107,7 +114,7 @@ body,
 
 /* ── Selection ─────────────────────────────────────────────── */
 ::selection {
-  background: rgba(255, 85, 0, 0.3);
+  background: var(--color-accent-selection);
   color: white;
 }
 
@@ -117,7 +124,7 @@ body,
 }
 
 :focus-visible {
-  outline: 1px solid rgba(255, 85, 0, 0.4);
+  outline: 1px solid var(--color-accent);
   outline-offset: 2px;
   border-radius: 8px;
 }
@@ -136,6 +143,57 @@ body,
 
 .animate-fade-in-up {
   animation: fadeInUp 0.5s var(--ease-apple) both;
+}
+
+/* ── Dialog animations (Radix data-state) ────────────────── */
+@keyframes dialogOverlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dialogOverlayOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes dialogContentIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+@keyframes dialogContentOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+}
+
+.dialog-overlay[data-state="open"] {
+  animation: dialogOverlayIn 0.2s var(--ease-apple) forwards;
+}
+.dialog-overlay[data-state="closed"] {
+  animation: dialogOverlayOut 0.15s var(--ease-apple) forwards;
+}
+.dialog-content[data-state="open"] {
+  animation: dialogContentIn 0.25s var(--ease-apple) forwards;
+}
+.dialog-content[data-state="closed"] {
+  animation: dialogContentOut 0.15s var(--ease-apple) forwards;
 }
 
 /* ── Featured card glass ──────────────────────────────────── */
@@ -176,27 +234,24 @@ body,
   cursor: pointer;
   padding: 6px 0;
   line-height: 1.4;
-  transform-origin: left;
-  transition:
-    color 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-    font-size 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  color: rgba(255, 255, 255, 0.3);
   font-size: 20px;
   font-weight: 500;
-  opacity: 1;
+  color: rgba(255, 255, 255, 0.3);
+  transform-origin: left center;
+  transform: scale(1);
+  will-change: transform, color;
+  /* Only composite-friendly props — no font-size/opacity reflows */
+  transition:
+    color 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .lyric-line[data-state="active"] {
   color: #fff;
-  font-size: 24px;
   font-weight: 700;
-  transform: scale(1.01);
+  transform: scale(1.2);
 }
 
 .lyric-line[data-state="past"] {
   color: rgba(255, 255, 255, 0.12);
-  font-size: 20px;
-  font-weight: 500;
 }

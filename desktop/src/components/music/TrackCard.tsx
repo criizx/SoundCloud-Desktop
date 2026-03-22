@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { preloadTrack } from '../../lib/audio';
 import { art, dur, fc } from '../../lib/formatters';
-import { ListPlus, pauseBlack20, playBlack20, playIcon32 } from '../../lib/icons';
+import { ListMusic, ListPlus, pauseBlack20, playBlack20, playIcon32 } from '../../lib/icons';
 import { useTrackPlay } from '../../lib/useTrackPlay';
 import type { Track } from '../../stores/player';
 import { usePlayerStore } from '../../stores/player';
+import { AddToPlaylistDialog } from './AddToPlaylistDialog';
+import { LikeButton } from './LikeButton';
 
 interface TrackCardProps {
   track: Track;
@@ -37,7 +39,7 @@ export const TrackCard = React.memo(
               src={artwork}
               alt={track.title}
               className="w-full h-full object-cover transition-transform duration-500 ease-[var(--ease-apple)] group-hover:scale-[1.04]"
-              loading="lazy"
+              decoding="async"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-white/20">
@@ -63,19 +65,41 @@ export const TrackCard = React.memo(
           </div>
 
           {/* Duration pill */}
-          <div className="absolute bottom-2 right-2 text-[10px] font-medium bg-black/50 backdrop-blur-md text-white/80 px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            {dur(track.duration)}
+          <div className="absolute bottom-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            {track.access === 'preview' && (
+              <div className="text-[10px] font-medium bg-amber-500/80 backdrop-blur-md text-white px-2 py-0.5 rounded-full">
+                {t('track.preview')}
+              </div>
+            )}
+            <div className="text-[10px] font-medium bg-black/50 backdrop-blur-md text-white/80 px-2 py-0.5 rounded-full">
+              {dur(track.duration)}
+            </div>
           </div>
 
-          {/* Add to Queue button */}
-          <button
-            type="button"
-            onClick={handleAddToQueue}
-            className="cursor-pointer absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white hover:bg-black/70 opacity-0 group-hover:opacity-100 transition-all duration-200"
-            title={t('player.addToQueue')}
-          >
-            <ListPlus size={16} />
-          </button>
+          {/* Like button — top left */}
+          <LikeButton track={track} variant="overlay" />
+
+          {/* Top right: add to playlist + add to queue */}
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <AddToPlaylistDialog trackUrns={[track.urn]}>
+              <button
+                type="button"
+                onClick={(e) => e.stopPropagation()}
+                className="cursor-pointer w-8 h-8 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white hover:bg-black/70 transition-all duration-200"
+                title={t('playlist.addToPlaylist')}
+              >
+                <ListPlus size={14} />
+              </button>
+            </AddToPlaylistDialog>
+            <button
+              type="button"
+              onClick={handleAddToQueue}
+              className="cursor-pointer w-8 h-8 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white hover:bg-black/70 transition-all duration-200"
+              title={t('player.addToQueue')}
+            >
+              <ListMusic size={14} />
+            </button>
+          </div>
         </div>
 
         {/* Info */}
@@ -101,5 +125,6 @@ export const TrackCard = React.memo(
       </div>
     );
   },
-  (prev, next) => prev.track.urn === next.track.urn,
+  (prev, next) =>
+    prev.track.urn === next.track.urn && prev.track.user_favorite === next.track.user_favorite,
 );

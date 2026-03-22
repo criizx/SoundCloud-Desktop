@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useEffect, useMemo, useRef } from 'react';
 import type { Track } from '../stores/player';
 import { api } from './api';
+import { initLikedUrns } from './likes';
 
 /* ── Types ─────────────────────────────────────────────────────── */
 
@@ -153,6 +154,81 @@ function extractPagination(href: string | null): PageParam | undefined {
   }
 }
 
+/* ── History ───────────────────────────────────────────────────── */
+
+export interface HistoryEntry {
+  id: string;
+  scTrackId: string;
+  title: string;
+  artistName: string;
+  artworkUrl: string | null;
+  duration: number;
+  playedAt: string;
+}
+
+export function useHistory(limit = 50) {
+  const query = useInfiniteQuery({
+    queryKey: ['history'],
+    queryFn: async ({ pageParam = 0 }) => {
+      return api<{ collection: HistoryEntry[]; total: number }>(
+        `/history?limit=${limit}&offset=${pageParam}`,
+      );
+    },
+    initialPageParam: 0,
+    getNextPageParam: (last, _all, lastOffset) => {
+      const nextOffset = (lastOffset as number) + limit;
+      return nextOffset < last.total ? nextOffset : undefined;
+    },
+    staleTime: 0,
+  });
+
+  const entries = useMemo(() => {
+    if (!query.data) return [];
+    const arr: HistoryEntry[] = [];
+    for (const page of query.data.pages) {
+      for (const e of page.collection) arr.push(e);
+    }
+    return arr;
+  }, [query.data]);
+
+  return { entries, ...query };
+}
+
+/* ── Local Likes ──────────────────────────────────────────────── */
+
+export function useLocalLikes(limit = 50) {
+  const query = useInfiniteQuery({
+    queryKey: ['local-likes'],
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (pageParam) params.set('cursor', pageParam as string);
+      return api<TrackListResponse>(`/local-likes?${params}`);
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => {
+      if (!last.next_href) return undefined;
+      try {
+        const url = new URL(last.next_href, 'http://x');
+        return url.searchParams.get('cursor') || undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    staleTime: 0,
+  });
+
+  const tracks = useMemo(() => {
+    if (!query.data) return [];
+    const arr: Track[] = [];
+    for (const page of query.data.pages) {
+      for (const t of page.collection) arr.push(t);
+    }
+    return arr;
+  }, [query.data]);
+
+  return { tracks, ...query };
+}
+
 /* ── Feed ──────────────────────────────────────────────────────── */
 
 export function useFeed() {
@@ -236,6 +312,12 @@ export function useLikedTracks(limit = 30) {
     }
     return arr;
   }, [query.data]);
+
+  // Seed global liked URNs store
+  useEffect(() => {
+    if (tracks.length > 0) initLikedUrns(tracks);
+  }, [tracks]);
+
   return { tracks, ...query };
 }
 
@@ -389,7 +471,7 @@ export function usePlaylistTracks(playlistUrn: string | undefined) {
   const query = useInfiniteQuery({
     queryKey: ['playlist', playlistUrn, 'tracks'],
     queryFn: async ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '50' });
+      const params = new URLSearchParams({ limit: '200' });
       if (pageParam) {
         for (const [key, val] of Object.entries(pageParam)) {
           params.set(key, val);
@@ -409,6 +491,13 @@ export function usePlaylistTracks(playlistUrn: string | undefined) {
     enabled: !!playlistUrn,
     refetchOnMount: 'always',
   });
+
+  // Auto-fetch all pages so full playlist loads without scrolling
+  useEffect(() => {
+    if (query.hasNextPage && !query.isFetchingNextPage) {
+      query.fetchNextPage();
+    }
+  }, [query.hasNextPage, query.isFetchingNextPage, query.data]);
 
   const tracks = useMemo(() => {
     if (!query.data) return [];
@@ -436,7 +525,7 @@ export function useUserTracks(userUrn: string | undefined) {
   const query = useInfiniteQuery({
     queryKey: ['user', userUrn, 'tracks'],
     queryFn: async ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '30', access: 'playable' });
+      const params = new URLSearchParams({ limit: '30', access: 'playable,preview,blocked' });
       if (pageParam) {
         for (const [key, val] of Object.entries(pageParam)) {
           params.set(key, val);
@@ -476,7 +565,10 @@ export function useUserPopularTracks(userUrn: string | undefined) {
 
       // Paginate through all tracks
       for (;;) {
-        const params = new URLSearchParams({ limit: String(pageSize), access: 'playable' });
+        const params = new URLSearchParams({
+          limit: String(pageSize),
+          access: 'playable,preview,blocked',
+        });
         if (cursor) params.set('cursor', cursor);
         const page = await api<TrackListResponse>(
           `/users/${encodeURIComponent(userUrn!)}/tracks?${params}`,
@@ -536,7 +628,7 @@ export function useUserLikedTracks(userUrn: string | undefined) {
   const query = useInfiniteQuery({
     queryKey: ['user', userUrn, 'likes', 'tracks'],
     queryFn: async ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '30', access: 'playable' });
+      const params = new URLSearchParams({ limit: '30', access: 'playable,preview,blocked' });
       if (pageParam) {
         for (const [key, val] of Object.entries(pageParam)) {
           params.set(key, val);
@@ -711,6 +803,83 @@ export function useMyPlaylists(limit = 30) {
     return arr;
   }, [query.data]);
   return { playlists, ...query };
+}
+
+/* ── Playlist Mutations ────────────────────────────────────────── */
+
+export function useUpdatePlaylistTracks(playlistUrn: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (trackUrns: string[]) =>
+      api<Playlist>(`/playlists/${encodeURIComponent(playlistUrn!)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ playlist: { tracks: trackUrns.map((urn) => ({ urn })) } }),
+      }),
+    onSuccess: (data) => {
+      qc.setQueryData(['playlist', playlistUrn], data);
+      qc.invalidateQueries({ queryKey: ['playlist', playlistUrn, 'tracks'] });
+      qc.invalidateQueries({ queryKey: ['me', 'playlists'] });
+    },
+  });
+}
+
+export function useAddToPlaylist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      playlistUrn,
+      existingTrackUrns,
+      newTrackUrns,
+    }: {
+      playlistUrn: string;
+      existingTrackUrns: string[];
+      newTrackUrns: string[];
+    }) => {
+      const allUrns = [...existingTrackUrns, ...newTrackUrns];
+      return api<Playlist>(`/playlists/${encodeURIComponent(playlistUrn)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ playlist: { tracks: allUrns.map((urn) => ({ urn })) } }),
+      });
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['playlist', vars.playlistUrn] });
+      qc.invalidateQueries({ queryKey: ['playlist', vars.playlistUrn, 'tracks'] });
+      qc.invalidateQueries({ queryKey: ['me', 'playlists'] });
+    },
+  });
+}
+
+export function useCreatePlaylist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { title: string; sharing?: 'public' | 'private'; trackUrns?: string[] }) =>
+      api<Playlist>('/playlists', {
+        method: 'POST',
+        body: JSON.stringify({
+          playlist: {
+            title: params.title,
+            sharing: params.sharing ?? 'public',
+            ...(params.trackUrns?.length
+              ? { tracks: params.trackUrns.map((urn) => ({ urn })) }
+              : {}),
+          },
+        }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['me', 'playlists'] });
+    },
+  });
+}
+
+export function useDeletePlaylist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (playlistUrn: string) =>
+      api(`/playlists/${encodeURIComponent(playlistUrn)}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['me', 'playlists'] });
+    },
+  });
 }
 
 /* ── Search ────────────────────────────────────────────────────── */

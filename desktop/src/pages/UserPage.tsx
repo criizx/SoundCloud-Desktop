@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import { AddToPlaylistDialog } from '../components/music/AddToPlaylistDialog';
+import { LikeButton } from '../components/music/LikeButton';
 import { PlaylistCard } from '../components/music/PlaylistCard';
 import { Avatar } from '../components/ui/Avatar';
 import { CopyLinkButton } from '../components/ui/CopyLinkButton';
@@ -160,7 +162,7 @@ const TrackRow = React.memo(
           onClick={togglePlay}
         >
           {isThisPlaying ? (
-            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center shadow-[0_0_15px_var(--color-accent-glow)] scale-100 animate-fade-in-up">
+            <div className="w-8 h-8 rounded-full bg-accent text-accent-contrast flex items-center justify-center shadow-[0_0_15px_var(--color-accent-glow)] scale-100 animate-fade-in-up">
               {pauseWhite14}
             </div>
           ) : (
@@ -178,7 +180,7 @@ const TrackRow = React.memo(
         {/* Artwork */}
         <div className="relative w-11 h-11 rounded-xl overflow-hidden shrink-0 ring-1 ring-white/[0.08] shadow-md">
           {cover ? (
-            <img src={cover} alt="" className="w-full h-full object-cover" loading="lazy" />
+            <img src={cover} alt="" className="w-full h-full object-cover" decoding="async" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/[0.05] to-transparent">
               <Music size={14} className="text-white/20" />
@@ -222,14 +224,18 @@ const TrackRow = React.memo(
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={handleAddToQueue}
-          className="opacity-0 group-hover:opacity-100 w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-white/80 hover:bg-white/[0.08] transition-all duration-200 shrink-0"
-          title={t('player.addToQueue')}
-        >
-          <ListPlus size={16} />
-        </button>
+        {/* Like + Add to playlist */}
+        <div className="flex items-center gap-0.5 shrink-0">
+          <LikeButton track={track} />
+          <AddToPlaylistDialog trackUrns={[track.urn]}>
+            <button
+              type="button"
+              className="cursor-pointer w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-white/50 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0"
+            >
+              <ListPlus size={14} />
+            </button>
+          </AddToPlaylistDialog>
+        </div>
 
         {/* Duration */}
         <span className="text-[12px] text-white/30 tabular-nums font-medium shrink-0 w-12 text-right">
@@ -241,7 +247,7 @@ const TrackRow = React.memo(
   (prev, next) =>
     prev.track.urn === next.track.urn &&
     prev.index === next.index &&
-    prev.queue.length === next.queue.length,
+    prev.track.user_favorite === next.track.user_favorite,
 );
 
 /* ── Isolated Tab Content ────────────────────────────────── */

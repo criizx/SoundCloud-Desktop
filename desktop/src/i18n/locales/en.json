@@ -4,7 +4,9 @@
     "search": "Search",
     "library": "Library",
     "following": "Following",
-    "settings": "Settings"
+    "settings": "Settings",
+    "collapse": "Collapse",
+    "expand": "Expand"
   },
   "player": {
     "queue": "Queue",
@@ -47,7 +49,10 @@
     "lyrics": "Lyrics",
     "lyricsNotFound": "Lyrics not found",
     "lyricsNotFoundHint": "Try searching on Genius.com",
-    "lyricsLoading": "Searching lyrics..."
+    "lyricsLoading": "Searching lyrics...",
+    "download": "Download",
+    "downloaded": "Saved",
+    "preview": "Preview"
   },
   "playlist": {
     "playAll": "Play All",
@@ -55,7 +60,24 @@
     "tracks_one": "{{count}} track",
     "tracks_other": "{{count}} tracks",
     "by": "by",
-    "noTracks": "No tracks in this playlist"
+    "noTracks": "No tracks in this playlist",
+    "removeTrack": "Remove from playlist",
+    "trackRemoved": "Track removed",
+    "reordered": "Track order saved",
+    "addToPlaylist": "Add to playlist",
+    "addedToPlaylist": "Added to playlist",
+    "selectPlaylist": "Select playlist",
+    "noPlaylists": "No playlists found",
+    "newPlaylist": "New playlist",
+    "playlistName": "Playlist name",
+    "create": "Create",
+    "creating": "Creating...",
+    "created": "Playlist created",
+    "delete": "Delete playlist",
+    "deleteConfirm": "Delete \"{{title}}\"? This cannot be undone.",
+    "deleted": "Playlist deleted",
+    "private": "Private",
+    "public": "Public"
   },
   "user": {
     "followers": "Followers",
@@ -75,8 +97,19 @@
     "likedTracks": "Liked Tracks",
     "likedPlaylists": "Liked Playlists",
     "yourPlaylists": "Your Playlists",
+    "localLikes": "Local",
+    "noLocalLikes": "No local likes yet",
     "history": "History",
-    "historyEmpty": "No listening history yet"
+    "historyEmpty": "No listening history",
+    "clearHistory": "Clear history",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "earlier": "Earlier",
+    "filter": "Filter...",
+    "noMatches": "No matches",
+    "noLikedTracks": "No liked tracks yet",
+    "notFollowing": "You are not following anyone",
+    "noPlaylists": "No playlists found"
   },
   "home": {
     "goodMorning": "Good morning",
@@ -116,12 +149,78 @@
     "transitionFade": "Fade",
     "transitionDuration": "Transition duration",
     "seconds": "sec",
-    "account": "Account"
+    "account": "Account",
+    "language": "Language",
+    "audioDevice": "Audio output",
+    "audioDeviceDefault": "System default",
+    "audioDeviceSwitched": "Audio device switched",
+    "themePreset": "Theme",
+    "theme_soundcloud": "SoundCloud",
+    "theme_dark": "Dark",
+    "theme_neon": "Neon",
+    "theme_forest": "Forest",
+    "theme_crimson": "Crimson",
+    "themeCustom": "Custom",
+    "playback": "Playback",
+    "floatingComments": "Floating comments",
+    "floatingCommentsDesc": "Show comments as floating pills during playback",
+    "import": "Import",
+    "importYandex": "Import from Yandex Music"
+  },
+  "eq": {
+    "title": "Equalizer",
+    "enabled": "Enabled",
+    "preset": "Preset",
+    "reset": "Reset",
+    "custom": "Custom",
+    "streamingNote": "EQ works with cached tracks (Web Audio)"
+  },
+  "kb": {
+    "title": "Keyboard Shortcuts",
+    "toToggle": "to show this dialog",
+    "groupPlayback": "Playback",
+    "groupNavigation": "Navigation",
+    "groupPanels": "Panels",
+    "playPause": "Play / Pause",
+    "seekBack": "Seek back 5s",
+    "seekForward": "Seek forward 5s",
+    "nextTrack": "Next track",
+    "prevTrack": "Previous track",
+    "shuffle": "Toggle shuffle",
+    "repeat": "Toggle repeat",
+    "volumeUp": "Volume up",
+    "volumeDown": "Volume down",
+    "mute": "Mute / Unmute",
+    "search": "Search",
+    "queue": "Toggle queue",
+    "lyrics": "Toggle lyrics",
+    "sidebar": "Toggle sidebar",
+    "close": "Close",
+    "showBindings": "Show shortcuts"
+  },
+  "ym": {
+    "instructions": "How to get your Yandex Music token:",
+    "step1": "Install the browser extension: Chrome — \"Yandex Music Token\", Firefox — \"Yandex Music Token\"",
+    "step2": "Open music.yandex.ru and click the extension icon",
+    "step3": "Copy the OAuth token from the extension",
+    "tokenPlaceholder": "Paste your Yandex Music token...",
+    "start": "Start import",
+    "stop": "Stop",
+    "found": "Found",
+    "notFound": "Not found",
+    "done": "Import complete!",
+    "savingPlaylist": "Saving playlist..."
+  },
+  "update": {
+    "available": "Update available",
+    "later": "Later",
+    "download": "Download"
   },
   "common": {
     "loading": "Loading...",
     "error": "Something went wrong",
     "retry": "Retry",
-    "seeAll": "See All"
+    "seeAll": "See All",
+    "cancel": "Cancel"
   }
 }

@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { art, dur } from '../../lib/formatters';
 import { GripVertical, pauseTextWhite12, playIcon32, Trash2, X } from '../../lib/icons';
-import { type Track, usePlayerStore } from '../../stores/player';
+import { usePlayerStore } from '../../stores/player';
 
 /* ── Now Playing (single, non-draggable) ─────────────────────────── */
 const NowPlayingItem = React.memo(() => {
@@ -100,11 +100,11 @@ const DraggableQueue = React.memo(({ startIndex }: { startIndex: number }) => {
     setOverIdx(null);
   };
 
-  const handleClick = (track: Track, absIdx: number) => {
-    const { play, pause, resume } = usePlayerStore.getState();
+  const handleClick = (absIdx: number) => {
+    const { playFromQueue, pause, resume } = usePlayerStore.getState();
     if (absIdx === queueIndex && isPlaying) pause();
     else if (absIdx === queueIndex) resume();
-    else play(track, queue);
+    else playFromQueue(absIdx);
   };
 
   const handleRemove = (absIdx: number) => {
@@ -148,10 +148,10 @@ const DraggableQueue = React.memo(({ startIndex }: { startIndex: number }) => {
             {/* Artwork */}
             <div
               className="w-9 h-9 rounded-lg overflow-hidden shrink-0 relative bg-white/[0.04] cursor-pointer"
-              onClick={() => handleClick(track, absIdx)}
+              onClick={() => handleClick(absIdx)}
             >
               {artwork ? (
-                <img src={artwork} alt="" className="w-full h-full object-cover" loading="lazy" />
+                <img src={artwork} alt="" className="w-full h-full object-cover" decoding="async" />
               ) : (
                 <div className="w-full h-full" />
               )}
@@ -171,10 +171,7 @@ const DraggableQueue = React.memo(({ startIndex }: { startIndex: number }) => {
             </div>
 
             {/* Info */}
-            <div
-              className="flex-1 min-w-0 cursor-pointer"
-              onClick={() => handleClick(track, absIdx)}
-            >
+            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleClick(absIdx)}>
               <p
                 className={`text-[12px] truncate leading-snug ${isCurrent ? 'text-accent font-medium' : 'text-white/80'}`}
               >
@@ -228,13 +225,14 @@ export const QueuePanel = React.memo(
 
         {/* Panel */}
         <div
-          className={`fixed top-0 right-0 bottom-0 w-[360px] z-50 flex flex-col transition-transform duration-300 ease-[var(--ease-apple)] ${
-            open ? 'translate-x-0' : 'translate-x-full'
-          }`}
+          className="fixed top-0 right-0 bottom-0 w-[360px] z-50 flex flex-col"
           style={{
             background: 'rgba(18, 18, 20, 0.88)',
             backdropFilter: 'blur(60px) saturate(1.8)',
             borderLeft: '1px solid rgba(255,255,255,0.06)',
+            transform: open ? 'translateX(0)' : 'translateX(100%)',
+            visibility: open ? 'visible' : 'hidden',
+            transition: 'transform 300ms cubic-bezier(0.16, 1, 0.3, 1), visibility 300ms',
           }}
         >
           {/* Header */}
