@@ -1,6 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { AddToPlaylistDialog } from '../components/music/AddToPlaylistDialog';
+import { LikeButton } from '../components/music/LikeButton';
 import { PlaylistCard } from '../components/music/PlaylistCard';
 import { api } from '../lib/api';
 import { preloadTrack } from '../lib/audio';
@@ -27,7 +29,6 @@ import {
 } from '../lib/icons';
 import { useTrackPlay } from '../lib/useTrackPlay';
 import type { Track } from '../stores/player';
-import { usePlayerStore } from '../stores/player';
 
 /* ── Components ───────────────────────────────────────────── */
 
@@ -38,10 +39,6 @@ const TrackRow = React.memo(
     const { isThis, isThisPlaying, togglePlay } = useTrackPlay(track, queue);
     const cover = art(track.artwork_url, 't200x200');
 
-    const handleAddToQueue = useCallback((e: React.MouseEvent) => {
-      e.stopPropagation();
-      usePlayerStore.getState().addToQueueNext([track]);
-    }, [track]);
 
     return (
       <div
@@ -57,8 +54,8 @@ const TrackRow = React.memo(
           onClick={togglePlay}
         >
           {isThisPlaying ? (
-            <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center shadow-[0_0_15px_var(--color-accent-glow)] scale-100 animate-fade-in-up">
-              <Pause size={16} fill="white" strokeWidth={0} />
+            <div className="w-9 h-9 rounded-full bg-accent text-accent-contrast flex items-center justify-center shadow-[0_0_15px_var(--color-accent-glow)] scale-100 animate-fade-in-up">
+              <Pause size={16} fill="currentColor" strokeWidth={0} />
             </div>
           ) : (
             <div className="w-9 h-9 rounded-full bg-white/[0.06] group-hover:bg-white/10 flex items-center justify-center transition-all">
@@ -74,7 +71,7 @@ const TrackRow = React.memo(
 
         <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 ring-1 ring-white/[0.08] shadow-md">
           {cover ? (
-            <img src={cover} alt="" className="w-full h-full object-cover" loading="lazy" />
+            <img src={cover} alt="" className="w-full h-full object-cover" decoding="async" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/[0.05] to-transparent">
               {musicIcon20}
@@ -114,14 +111,20 @@ const TrackRow = React.memo(
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={handleAddToQueue}
-          className="opacity-0 group-hover:opacity-100 w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-white/80 hover:bg-white/[0.08] transition-all duration-200 shrink-0"
-          title={t('player.addToQueue')}
-        >
-          <ListPlus size={16} />
-        </button>
+        {/* Like + Add to playlist */}
+        <div className="flex items-center gap-0.5 shrink-0">
+          <LikeButton track={track} />
+          <AddToPlaylistDialog trackUrns={[track.urn]}>
+            <button
+              type="button"
+              className="cursor-pointer w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-white/50 opacity-0 group-hover:opacity-100 transition-all duration-200"
+              title={t('playlist.addToPlaylist')}
+            >
+              <ListPlus size={14} />
+            </button>
+          </AddToPlaylistDialog>
+        </div>
+
 
         <span className="text-[12px] text-white/30 tabular-nums font-medium shrink-0 w-12 text-right">
           {dur(track.duration)}
@@ -129,7 +132,8 @@ const TrackRow = React.memo(
       </div>
     );
   },
-  (prev, next) => prev.track.urn === next.track.urn,
+  (prev, next) =>
+    prev.track.urn === next.track.urn && prev.track.user_favorite === next.track.user_favorite,
 );
 
 const UserCard = React.memo(({ user }: { user: SCUser }) => {
@@ -147,7 +151,7 @@ const UserCard = React.memo(({ user }: { user: SCUser }) => {
             src={avatar}
             alt={user.username}
             className="w-full h-full object-cover"
-            loading="lazy"
+            decoding="async"
           />
         ) : (
           <div className="w-full h-full bg-white/5 flex items-center justify-center">

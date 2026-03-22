@@ -1,12 +1,17 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AddToPlaylistDialog } from '../components/music/AddToPlaylistDialog';
+import { LikeButton } from '../components/music/LikeButton';
 import { PlaylistCard } from '../components/music/PlaylistCard';
+import { api } from '../lib/api';
 import { preloadTrack } from '../lib/audio';
 import { art, dur, fc } from '../lib/formatters';
 import {
   fetchAllLikedTracks,
+  type HistoryEntry,
   type SCUser,
+  useHistory,
   useInfiniteScroll,
   useLikedTracks,
   useMyFollowings,
@@ -17,19 +22,20 @@ import {
   Heart,
   headphones11,
   heart11,
+  ListMusic,
   ListPlus,
   Loader2,
   Music,
   pauseWhite14,
   playBlack20ml1,
   playWhite14,
-  Trash2,
+  Search as SearchIcon,
   User,
   Users,
+  X,
 } from '../lib/icons';
 import { useTrackPlay } from '../lib/useTrackPlay';
 import { useAuthStore } from '../stores/auth';
-import { useHistoryStore } from '../stores/history';
 import type { Track } from '../stores/player';
 import { usePlayerStore } from '../stores/player';
 
@@ -77,7 +83,7 @@ const LibraryTrackRow = React.memo(
           onMouseEnter={() => preloadTrack(track.urn)}
         >
           {isThisPlaying ? (
-            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center shadow-[0_0_15px_var(--color-accent-glow)] scale-100 animate-fade-in-up">
+            <div className="w-8 h-8 rounded-full bg-accent text-accent-contrast flex items-center justify-center shadow-[0_0_15px_var(--color-accent-glow)] scale-100 animate-fade-in-up">
               {pauseWhite14}
             </div>
           ) : (
@@ -94,7 +100,7 @@ const LibraryTrackRow = React.memo(
 
         <div className="relative w-11 h-11 rounded-xl overflow-hidden shrink-0 ring-1 ring-white/[0.08] shadow-md">
           {cover ? (
-            <img src={cover} alt="" className="w-full h-full object-cover" loading="lazy" />
+            <img src={cover} alt="" className="w-full h-full object-cover" decoding="async" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/[0.05] to-transparent">
               <Music size={14} className="text-white/20" />
@@ -120,6 +126,18 @@ const LibraryTrackRow = React.memo(
             {track.user.username}
           </p>
         </div>
+
+        <LikeButton track={track} />
+
+        <AddToPlaylistDialog trackUrns={[track.urn]}>
+          <button
+            type="button"
+            className="opacity-0 group-hover:opacity-100 w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-white/80 hover:bg-white/[0.08] transition-all duration-200 shrink-0"
+            title={t('playlist.addToPlaylist')}
+          >
+            <ListMusic size={16} />
+          </button>
+        </AddToPlaylistDialog>
 
         <button
           type="button"
@@ -167,7 +185,7 @@ const UserCard = React.memo(({ user }: { user: SCUser }) => {
             src={avatar}
             alt={user.username}
             className="w-full h-full object-cover"
-            loading="lazy"
+            decoding="async"
           />
         ) : (
           <div className="w-full h-full bg-white/5 flex items-center justify-center">
@@ -215,8 +233,11 @@ const LibraryHero = React.memo(function LibraryHero({
       const all = await fetchAllLikedTracks();
       if (all.length === 0) return;
 
-      const shuffled = [...all].sort(() => Math.random() - 0.5);
-      usePlayerStore.getState().play(shuffled[0], shuffled);
+      if (!usePlayerStore.getState().shuffle) {
+        usePlayerStore.setState({ shuffle: true });
+      }
+      const random = all[Math.floor(Math.random() * all.length)];
+      usePlayerStore.getState().play(random, all);
     } finally {
       setShuffleLoading(false);
     }
@@ -318,7 +339,8 @@ const LibraryHero = React.memo(function LibraryHero({
 
 /* Each tab is its own component — only fetches its own data */
 
-const LikesTab = React.memo(function LikesTab() {
+const LikesTab = React.memo(function LikesTab({ filter }: { filter: string }) {
+  const { t } = useTranslation();
   const likesQuery = useLikedTracks();
   const { tracks: likedTracks, isLoading } = likesQuery;
   const sentinelRef = useInfiniteScroll(
@@ -326,6 +348,21 @@ const LikesTab = React.memo(function LikesTab() {
     !!likesQuery.isFetchingNextPage,
     likesQuery.fetchNextPage,
   );
+
+  // Auto-fetch remaining pages when filtering
+  useEffect(() => {
+    if (filter && likesQuery.hasNextPage && !likesQuery.isFetchingNextPage) {
+      likesQuery.fetchNextPage();
+    }
+  }, [filter, likesQuery.hasNextPage, likesQuery.isFetchingNextPage]);
+
+  const filtered = useMemo(() => {
+    if (!filter) return likedTracks;
+    const q = filter.toLowerCase();
+    return likedTracks.filter(
+      (t) => t.title.toLowerCase().includes(q) || t.user.username.toLowerCase().includes(q),
+    );
+  }, [likedTracks, filter]);
 
   const expandQueue = React.useCallback(() => {
     fetchAllLikedTracks().then((all) => {
@@ -340,30 +377,43 @@ const LikesTab = React.memo(function LikesTab() {
           <div className="flex justify-center py-20">
             <Loader2 size={32} className="animate-spin text-white/20" />
           </div>
-        ) : likedTracks.length > 0 ? (
-          likedTracks.map((track, i) => (
+        ) : filtered.length > 0 ? (
+          filtered.map((track, i) => (
             <LibraryTrackRow
               key={track.urn}
               track={track}
               index={i}
-              queue={likedTracks}
+              queue={filtered}
               onPlay={expandQueue}
             />
           ))
         ) : (
-          <div className="py-20 text-center text-white/20">No liked tracks yet</div>
+          <div className="py-20 text-center text-white/20">
+            {filter && likesQuery.hasNextPage
+              ? t('common.loading')
+              : filter
+                ? t('library.noMatches')
+                : t('library.noLikedTracks')}
+          </div>
         )}
       </div>
-      <div ref={sentinelRef} className="h-12 flex items-center justify-center mt-4">
-        {likesQuery.isFetchingNextPage && (
+      {!filter ? (
+        <div ref={sentinelRef} className="h-12 flex items-center justify-center mt-4">
+          {likesQuery.isFetchingNextPage && (
+            <Loader2 size={20} className="text-white/15 animate-spin" />
+          )}
+        </div>
+      ) : likesQuery.isFetchingNextPage ? (
+        <div className="h-12 flex items-center justify-center mt-4">
           <Loader2 size={20} className="text-white/15 animate-spin" />
-        )}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 });
 
-const FollowingTab = React.memo(function FollowingTab() {
+const FollowingTab = React.memo(function FollowingTab({ filter }: { filter: string }) {
+  const { t } = useTranslation();
   const followingsQuery = useMyFollowings();
   const { users: followings, isLoading } = followingsQuery;
   const sentinelRef = useInfiniteScroll(
@@ -372,36 +422,65 @@ const FollowingTab = React.memo(function FollowingTab() {
     followingsQuery.fetchNextPage,
   );
 
+  // Auto-fetch remaining pages when filtering
+  useEffect(() => {
+    if (filter && followingsQuery.hasNextPage && !followingsQuery.isFetchingNextPage) {
+      followingsQuery.fetchNextPage();
+    }
+  }, [filter, followingsQuery.hasNextPage, followingsQuery.isFetchingNextPage]);
+
+  const filtered = useMemo(() => {
+    if (!filter) return followings;
+    const q = filter.toLowerCase();
+    return followings.filter((u) => u.username.toLowerCase().includes(q));
+  }, [followings, filter]);
+
   return (
     <div className="min-h-[400px]">
       {isLoading ? (
         <div className="flex justify-center py-20">
           <Loader2 size={32} className="animate-spin text-white/20" />
         </div>
-      ) : followings.length > 0 ? (
+      ) : filtered.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {followings.map((u) => (
+          {filtered.map((u) => (
             <UserCard key={u.urn} user={u} />
           ))}
         </div>
       ) : (
-        <div className="py-20 text-center text-white/20">You are not following anyone</div>
+        <div className="py-20 text-center text-white/20">
+          {filter ? t('library.noMatches') : t('library.notFollowing')}
+        </div>
       )}
-      <div ref={sentinelRef} className="h-12 flex items-center justify-center mt-4">
-        {followingsQuery.isFetchingNextPage && (
-          <Loader2 size={20} className="text-white/15 animate-spin" />
-        )}
-      </div>
+      {!filter && (
+        <div ref={sentinelRef} className="h-12 flex items-center justify-center mt-4">
+          {followingsQuery.isFetchingNextPage && (
+            <Loader2 size={20} className="text-white/15 animate-spin" />
+          )}
+        </div>
+      )}
     </div>
   );
 });
 
-const PlaylistsTab = React.memo(function PlaylistsTab() {
+const PlaylistsTab = React.memo(function PlaylistsTab({ filter }: { filter: string }) {
   const { t } = useTranslation();
   const myPlaylistsQuery = useMyPlaylists();
   const likedPlaylistsQuery = useMyLikedPlaylists();
   const createdPlaylists = myPlaylistsQuery.playlists;
   const likedPlaylists = likedPlaylistsQuery.playlists;
+
+  const filteredCreated = useMemo(() => {
+    if (!filter) return createdPlaylists;
+    const q = filter.toLowerCase();
+    return createdPlaylists.filter((p) => p.title.toLowerCase().includes(q));
+  }, [createdPlaylists, filter]);
+
+  const filteredLiked = useMemo(() => {
+    if (!filter) return likedPlaylists;
+    const q = filter.toLowerCase();
+    return likedPlaylists.filter((p) => p.title.toLowerCase().includes(q));
+  }, [likedPlaylists, filter]);
 
   const hasNextPage = likedPlaylistsQuery.hasNextPage || myPlaylistsQuery.hasNextPage;
   const isFetchingNextPage =
@@ -411,6 +490,13 @@ const PlaylistsTab = React.memo(function PlaylistsTab() {
     : myPlaylistsQuery.fetchNextPage;
   const sentinelRef = useInfiniteScroll(!!hasNextPage, !!isFetchingNextPage, fetchNextPage);
 
+  // Auto-fetch remaining pages when filtering
+  useEffect(() => {
+    if (filter && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [filter, hasNextPage, isFetchingNextPage]);
+
   return (
     <div className="min-h-[400px]">
       <div className="space-y-10">
@@ -418,13 +504,13 @@ const PlaylistsTab = React.memo(function PlaylistsTab() {
           <div className="flex justify-center py-10">
             <Loader2 size={24} className="animate-spin text-white/20" />
           </div>
-        ) : createdPlaylists.length > 0 ? (
+        ) : filteredCreated.length > 0 ? (
           <section>
             <h3 className="text-lg font-bold text-white/80 mb-5 px-1">
               {t('library.yourPlaylists')}
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-              {createdPlaylists.map((p) => (
+              {filteredCreated.map((p) => (
                 <PlaylistCard key={p.urn} playlist={p} />
               ))}
             </div>
@@ -435,13 +521,13 @@ const PlaylistsTab = React.memo(function PlaylistsTab() {
           <div className="flex justify-center py-10">
             <Loader2 size={24} className="animate-spin text-white/20" />
           </div>
-        ) : likedPlaylists.length > 0 ? (
+        ) : filteredLiked.length > 0 ? (
           <section>
             <h3 className="text-lg font-bold text-white/80 mb-5 px-1">
               {t('library.likedPlaylists')}
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-              {likedPlaylists.map((p) => (
+              {filteredLiked.map((p) => (
                 <PlaylistCard key={p.urn} playlist={p} />
               ))}
             </div>
@@ -450,54 +536,167 @@ const PlaylistsTab = React.memo(function PlaylistsTab() {
 
         {!myPlaylistsQuery.isLoading &&
           !likedPlaylistsQuery.isLoading &&
-          createdPlaylists.length === 0 &&
-          likedPlaylists.length === 0 && (
-            <div className="py-20 text-center text-white/20">No playlists found</div>
+          filteredCreated.length === 0 &&
+          filteredLiked.length === 0 && (
+            <div className="py-20 text-center text-white/20">
+              {filter ? t('library.noMatches') : t('library.noPlaylists')}
+            </div>
           )}
       </div>
-      <div ref={sentinelRef} className="h-12 flex items-center justify-center mt-4">
-        {isFetchingNextPage && <Loader2 size={20} className="text-white/15 animate-spin" />}
-      </div>
+      {!filter && (
+        <div ref={sentinelRef} className="h-12 flex items-center justify-center mt-4">
+          {isFetchingNextPage && <Loader2 size={20} className="text-white/15 animate-spin" />}
+        </div>
+      )}
     </div>
   );
 });
 
+/* ── History Tab ──────────────────────────────────────────── */
+
+function formatHistoryDate(dateStr: string, t: (k: string) => string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  if (d >= today) return t('library.today');
+  if (d >= yesterday) return t('library.yesterday');
+  return t('library.earlier');
+}
+
 const HistoryTab = React.memo(function HistoryTab() {
   const { t } = useTranslation();
-  const { tracks, clear } = useHistoryStore();
+  const navigate = useNavigate();
+  const historyQuery = useHistory();
+  const { entries, isLoading } = historyQuery;
+  const sentinelRef = useInfiniteScroll(
+    !!historyQuery.hasNextPage,
+    !!historyQuery.isFetchingNextPage,
+    historyQuery.fetchNextPage,
+  );
+
+  const handleClearHistory = useCallback(async () => {
+    await api('/history', { method: 'DELETE' });
+    historyQuery.refetch();
+  }, [historyQuery]);
+
+  // Group entries by date
+  const grouped = useMemo(() => {
+    const groups: { label: string; items: HistoryEntry[] }[] = [];
+    let currentLabel = '';
+    for (const entry of entries) {
+      const label = formatHistoryDate(entry.playedAt, t);
+      if (label !== currentLabel) {
+        currentLabel = label;
+        groups.push({ label, items: [] });
+      }
+      groups[groups.length - 1].items.push(entry);
+    }
+    return groups;
+  }, [entries, t]);
 
   return (
     <div className="min-h-[400px]">
-      {tracks.length > 0 && (
-        <div className="flex justify-end mb-3">
+      {entries.length > 0 && (
+        <div className="flex justify-end mb-4">
           <button
-            type="button"
-            onClick={clear}
-            className="h-7 px-2.5 rounded-lg text-[11px] text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all duration-150 cursor-pointer flex items-center gap-1.5"
+            onClick={handleClearHistory}
+            className="text-[12px] text-white/30 hover:text-red-400 transition-colors cursor-pointer"
           >
-            <Trash2 size={12} />
-            {t('player.clearQueue')}
+            {t('library.clearHistory')}
           </button>
         </div>
       )}
-      <div className="flex flex-col gap-1">
-        {tracks.length === 0 ? (
-          <div className="py-20 text-center text-white/20">{t('library.historyEmpty')}</div>
-        ) : (
-          tracks.map((track, i) => (
-            <LibraryTrackRow key={`${track.urn}-${i}`} track={track} index={i} queue={tracks} />
-          ))
+
+      {isLoading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 size={32} className="animate-spin text-white/20" />
+        </div>
+      ) : grouped.length > 0 ? (
+        <div className="space-y-6">
+          {grouped.map((group) => (
+            <div key={group.label}>
+              <h3 className="text-[13px] font-bold text-white/30 uppercase tracking-wider mb-3 px-1">
+                {group.label}
+              </h3>
+              <div className="flex flex-col gap-1">
+                {group.items.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="group flex items-center gap-4 px-4 py-3 rounded-2xl hover:bg-white/[0.04] transition-all duration-300"
+                  >
+                    <div className="relative w-11 h-11 rounded-xl overflow-hidden shrink-0 ring-1 ring-white/[0.08] shadow-md">
+                      {entry.artworkUrl ? (
+                        <img
+                          src={entry.artworkUrl.replace('large', 't200x200')}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          decoding="async"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/[0.05] to-transparent">
+                          <Music size={14} className="text-white/20" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <p
+                        className="text-[14px] font-medium truncate text-white/90 hover:text-white cursor-pointer transition-colors"
+                        onClick={() => navigate(`/track/${encodeURIComponent(entry.scTrackId)}`)}
+                      >
+                        {entry.title}
+                      </p>
+                      <p className="text-[12px] text-white/40 truncate mt-0.5">
+                        {entry.artistName}
+                      </p>
+                    </div>
+
+                    <span className="text-[11px] text-white/20 tabular-nums shrink-0">
+                      {new Date(entry.playedAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="py-20 text-center text-white/20">{t('library.historyEmpty')}</div>
+      )}
+
+      <div ref={sentinelRef} className="h-12 flex items-center justify-center mt-4">
+        {historyQuery.isFetchingNextPage && (
+          <Loader2 size={20} className="text-white/15 animate-spin" />
         )}
       </div>
     </div>
   );
 });
 
-
-
 export const Library = React.memo(() => {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'playlists' | 'likes' | 'following' | 'history'>('likes');
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as
+    | 'playlists'
+    | 'likes'
+    | 'following'
+    | 'history'
+    | null;
+  const [activeTab, setActiveTab] = useState<'playlists' | 'likes' | 'following' | 'history'>(
+    tabParam || 'likes',
+  );
+  const [filter, setFilter] = useState('');
+
+  // Sync tab from URL param
+  useEffect(() => {
+    if (tabParam && tabParam !== activeTab) setActiveTab(tabParam);
+  }, [tabParam]);
+  const deferredFilter = useDeferredValue(filter);
+
   const user = useAuthStore((s) => s.user);
 
   const onTabLikes = React.useCallback(() => setActiveTab('likes'), []);
@@ -516,29 +715,57 @@ export const Library = React.memo(() => {
     <div className="p-6 pb-4 space-y-8">
       <LibraryHero onTabLikes={onTabLikes} onTabFollowing={onTabFollowing} />
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1.5 p-1.5 bg-white/[0.02] border border-white/[0.05] rounded-2xl w-fit backdrop-blur-2xl shadow-lg mx-auto md:mx-0">
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
+      {/* Tabs + Search */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-1.5 p-1.5 bg-white/[0.02] border border-white/[0.05] rounded-2xl w-fit backdrop-blur-2xl shadow-lg">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  setFilter('');
+                }}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-300 ease-[var(--ease-apple)] ${
+                  isActive
+                    ? 'bg-white/[0.12] text-white shadow-md border border-white/[0.05]'
+                    : 'text-white/40 hover:text-white/80 hover:bg-white/[0.04] border border-transparent'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="relative flex-1 min-w-[200px] max-w-[320px]">
+          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+            <SearchIcon size={15} className="text-white/30" />
+          </div>
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder={t('library.filter')}
+            className="w-full bg-white/[0.04] hover:bg-white/[0.06] focus:bg-white/[0.08] text-white/80 placeholder:text-white/25 text-[13px] py-2.5 pl-9 pr-8 rounded-xl outline-none border border-white/[0.05] focus:border-white/[0.12] transition-all duration-200"
+          />
+          {filter && (
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-300 ease-[var(--ease-apple)] ${
-                isActive
-                  ? 'bg-white/[0.12] text-white shadow-md border border-white/[0.05]'
-                  : 'text-white/40 hover:text-white/80 hover:bg-white/[0.04] border border-transparent'
-              }`}
+              type="button"
+              onClick={() => setFilter('')}
+              className="absolute inset-y-0 right-2 flex items-center text-white/30 hover:text-white/60 cursor-pointer transition-colors"
             >
-              {tab.label}
+              <X size={14} />
             </button>
-          );
-        })}
+          )}
+        </div>
       </div>
 
-      {activeTab === 'likes' && <LikesTab />}
-      {activeTab === 'following' && <FollowingTab />}
-      {activeTab === 'playlists' && <PlaylistsTab />}
+      {activeTab === 'likes' && <LikesTab filter={deferredFilter} />}
+      {activeTab === 'following' && <FollowingTab filter={deferredFilter} />}
+      {activeTab === 'playlists' && <PlaylistsTab filter={deferredFilter} />}
+
       {activeTab === 'history' && <HistoryTab />}
     </div>
   );

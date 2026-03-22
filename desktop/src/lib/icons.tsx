@@ -7,6 +7,7 @@
  */
 import {
   AlertCircle as _AlertCircle,
+  AudioLines as _AudioLines,
   Calendar as _Calendar,
   Check as _Check,
   ChevronDown as _ChevronDown,
@@ -17,10 +18,10 @@ import {
   Clock as _Clock,
   Compass as _Compass,
   Disc3 as _Disc3,
+  Download as _Download,
   ExternalLink as _ExternalLink,
   Globe as _Globe,
   GripVertical as _GripVertical,
-  MicVocal as _MicVocal,
   Hash as _Hash,
   Headphones as _Headphones,
   Heart as _Heart,
@@ -28,24 +29,33 @@ import {
   Home as _Home,
   Library as _Library,
   Link as _Link,
+  Link2 as _Link2,
   ListMusic as _ListMusic,
   ListPlus as _ListPlus,
   Loader2 as _Loader2,
+  Lock as _Lock,
+  PanelLeftClose as _PanelLeftClose,
+  PanelLeftOpen as _PanelLeftOpen,
   MapPin as _MapPin,
   MessageCircle as _MessageCircle,
+  MicVocal as _MicVocal,
   Minus as _Minus,
   Music as _Music,
   Pause as _Pause,
   Play as _Play,
+  Plus as _Plus,
+  Power as _Power,
   Repeat as _Repeat,
   Repeat1 as _Repeat1,
   Repeat2 as _Repeat2,
+  RotateCcw as _RotateCcw,
   Search as _Search,
   Send as _Send,
   Settings as _Settings,
   Shuffle as _Shuffle,
   SkipBack as _SkipBack,
   SkipForward as _SkipForward,
+  SlidersHorizontal as _SlidersHorizontal,
   Sparkles as _Sparkles,
   Square as _Square,
   Trash2 as _Trash2,
@@ -55,7 +65,6 @@ import {
   Volume2 as _Volume2,
   VolumeX as _VolumeX,
   X as _X,
-  Link2 as _Link2,
 } from 'lucide-react';
 import { memo } from 'react';
 import { siInstagram, siX, siYoutube } from 'simple-icons';
@@ -82,6 +91,7 @@ export const AlertCircle = memo(_AlertCircle);
 export const Calendar = memo(_Calendar);
 export const Check = memo(_Check);
 export const ClipboardCopy = memo(_ClipboardCopy);
+export const Download = memo(_Download);
 export const ChevronDown = memo(_ChevronDown);
 export const ChevronLeft = memo(_ChevronLeft);
 export const ChevronRight = memo(_ChevronRight);
@@ -105,13 +115,17 @@ export const LinkIcon = memo(_Link);
 export const ListMusic = memo(_ListMusic);
 export const ListPlus = memo(_ListPlus);
 export const Loader2 = memo(_Loader2);
+export const Lock = memo(_Lock);
 export const MapPin = memo(_MapPin);
 export const MicVocal = memo(_MicVocal);
 export const MessageCircle = memo(_MessageCircle);
 export const Minus = memo(_Minus);
 export const Music = memo(_Music);
+export const PanelLeftClose = memo(_PanelLeftClose);
+export const PanelLeftOpen = memo(_PanelLeftOpen);
 export const Pause = memo(_Pause);
 export const Play = memo(_Play);
+export const Plus = memo(_Plus);
 export const Repeat = memo(_Repeat);
 export const Repeat1 = memo(_Repeat1);
 export const Repeat2 = memo(_Repeat2);
@@ -134,6 +148,10 @@ export const Volume2 = memo(_Volume2);
 export const VolumeX = memo(_VolumeX);
 export const X = memo(_X);
 export const Link = memo(_Link2);
+export const SlidersHorizontal = memo(_SlidersHorizontal);
+export const AudioLines = memo(_AudioLines);
+export const Power = memo(_Power);
+export const RotateCcw = memo(_RotateCcw);
 export const Youtube = memo(({ size, className }: { size?: number; className?: string }) => (
   <SimpleIcon icon={siYoutube} size={size} className={className} />
 ));
@@ -154,12 +172,18 @@ export const pauseBlack20 = <_Pause size={20} fill="black" strokeWidth={0} />;
 export const playBlack22 = <_Play size={22} fill="black" strokeWidth={0} className="ml-0.5" />;
 export const pauseBlack22 = <_Pause size={22} fill="black" strokeWidth={0} />;
 
-// Play / Pause (filled, white)
-export const playWhite12 = <_Play size={12} fill="white" strokeWidth={0} className="ml-px" />;
-export const pauseWhite12 = <_Pause size={12} fill="white" strokeWidth={0} />;
-export const playWhite14 = <_Play size={14} fill="white" strokeWidth={0} className="ml-0.5" />;
-export const pauseWhite14 = <_Pause size={14} fill="white" strokeWidth={0} />;
-export const playWhite16 = <_Play size={16} fill="white" strokeWidth={0} className="ml-0.5" />;
+// Play / Pause (filled, inherits color via currentColor — use text-accent-contrast on parent)
+export const playWhite12 = (
+  <_Play size={12} fill="currentColor" strokeWidth={0} className="ml-px" />
+);
+export const pauseWhite12 = <_Pause size={12} fill="currentColor" strokeWidth={0} />;
+export const playWhite14 = (
+  <_Play size={14} fill="currentColor" strokeWidth={0} className="ml-0.5" />
+);
+export const pauseWhite14 = <_Pause size={14} fill="currentColor" strokeWidth={0} />;
+export const playWhite16 = (
+  <_Play size={16} fill="currentColor" strokeWidth={0} className="ml-0.5" />
+);
 
 // Play / Pause (filled, currentColor)
 export const playCurrent16 = <_Play size={16} fill="currentColor" strokeWidth={0} />;
@@ -194,3 +218,4 @@ export const musicIcon12 = <_Music size={12} className="text-white/15" />;
 export const musicIcon14 = <_Music size={14} className="text-white/15" />;
 export const musicIcon22 = <_Music size={22} className="text-white/15" />;
 export const musicIcon20 = <_Music size={16} className="text-white/20" />;
+export const audioLines16 = <_AudioLines size={16} />;

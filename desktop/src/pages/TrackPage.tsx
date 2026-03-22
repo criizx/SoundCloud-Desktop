@@ -2,9 +2,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { AddToPlaylistDialog } from '../components/music/AddToPlaylistDialog';
 import { CopyLinkButton } from '../components/ui/CopyLinkButton';
 import { api } from '../lib/api';
 import { getCurrentTime, preloadTrack } from '../lib/audio';
+import { downloadTrack } from '../lib/cache';
 import { ago, art, dateFormatted, dur, durLong, fc } from '../lib/formatters';
 import {
   type Comment,
@@ -20,6 +23,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Download,
   Hash,
   Headphones,
   Heart,
@@ -37,7 +41,7 @@ import {
   Repeat2,
   Send,
 } from '../lib/icons';
-import { optimisticToggleLike } from '../lib/likes';
+import { optimisticToggleLike, setLikedUrn, useLiked } from '../lib/likes';
 import { useTrackPlay } from '../lib/useTrackPlay';
 import { useLyricsStore } from '../stores/lyrics';
 import { type Track, usePlayerStore } from '../stores/player';
@@ -55,63 +59,49 @@ function parseTags(tagList?: string): string[] {
 
 /* ── Like Button ─────────────────────────────────────────── */
 
-const LikeBtn = React.memo(
-  ({
-    trackUrn,
-    initialLiked,
-    count,
-  }: {
-    trackUrn: string;
-    initialLiked?: boolean;
-    count?: number;
-  }) => {
-    const [liked, setLiked] = useState(initialLiked ?? false);
-    const [localCount, setLocalCount] = useState(count ?? 0);
-    const qc = useQueryClient();
+const LikeBtn = React.memo(({ trackUrn, count }: { trackUrn: string; count?: number }) => {
+  const liked = useLiked(trackUrn);
+  const [localCount, setLocalCount] = useState(count ?? 0);
+  const qc = useQueryClient();
 
-    // Sync local state when query data updates (e.g. after invalidation)
-    useEffect(() => {
-      setLiked(initialLiked ?? false);
-    }, [initialLiked]);
-    useEffect(() => {
-      setLocalCount(count ?? 0);
-    }, [count]);
+  useEffect(() => {
+    setLocalCount(count ?? 0);
+  }, [count]);
 
-    const toggle = async () => {
-      const next = !liked;
-      setLiked(next);
-      setLocalCount((c) => c + (next ? 1 : -1));
-      const cachedTrack = qc.getQueryData<Track>(['track', trackUrn]);
-      if (cachedTrack) optimisticToggleLike(qc, cachedTrack, next);
-      invalidateAllLikesCache();
-      try {
-        await api(`/likes/tracks/${encodeURIComponent(trackUrn)}`, {
-          method: next ? 'POST' : 'DELETE',
-        });
-        qc.invalidateQueries({ queryKey: ['track', trackUrn, 'favoriters'] });
-      } catch {
-        setLiked(!next);
-        setLocalCount((c) => c + (next ? -1 : 1));
-        if (cachedTrack) optimisticToggleLike(qc, cachedTrack, !next);
-      }
-    };
+  const toggle = async () => {
+    const next = !liked;
+    setLocalCount((c) => c + (next ? 1 : -1));
+    const cachedTrack = qc.getQueryData<Track>(['track', trackUrn]);
+    if (cachedTrack) optimisticToggleLike(qc, cachedTrack, next);
+    else setLikedUrn(trackUrn, next);
+    invalidateAllLikesCache();
+    try {
+      await api(`/likes/tracks/${encodeURIComponent(trackUrn)}`, {
+        method: next ? 'POST' : 'DELETE',
+      });
+      qc.invalidateQueries({ queryKey: ['track', trackUrn, 'favoriters'] });
+    } catch {
+      setLocalCount((c) => c + (next ? -1 : 1));
+      if (cachedTrack) optimisticToggleLike(qc, cachedTrack, !next);
+      else setLikedUrn(trackUrn, !next);
+    }
+  };
 
-    return (
-      <button
-        type="button"
-        onClick={toggle}
-        className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ease-[var(--ease-apple)] cursor-pointer ${
-          liked
-            ? 'bg-accent/15 text-accent border border-accent/20 shadow-[0_0_20px_rgba(255,85,0,0.1)]'
-            : 'glass hover:bg-white/[0.05] text-white/60 hover:text-white/80'
-        }`}
-      >
-        <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
-        <span className="tabular-nums">{fc(localCount)}</span>
-      </button>
-    );
-  },
-);
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ease-[var(--ease-apple)] cursor-pointer ${
+        liked
+          ? 'bg-accent/15 text-accent border border-accent/20 shadow-[0_0_20px_rgba(255,85,0,0.1)]'
+          : 'glass hover:bg-white/[0.05] text-white/60 hover:text-white/80'
+      }`}
+    >
+      <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
+      <span className="tabular-nums">{fc(localCount)}</span>
+    </button>
+  );
+});
 
 /* ── Repost Button ───────────────────────────────────────── */
 
@@ -316,6 +306,40 @@ const RelatedRow = React.memo(
   (prev, next) => prev.track.urn === next.track.urn,
 );
 
+/* ── Download Button ─────────────────────────────────────── */
+
+const DownloadButton = React.memo(({ track }: { track: Track }) => {
+  const { t } = useTranslation();
+  const [loading, setLoading] = useState(false);
+
+  const handleDownload = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      await downloadTrack(track.urn, track.user.username, track.title);
+      toast.success(t('track.downloaded'));
+    } catch (e: unknown) {
+      if (e instanceof Error && e.message === 'cancelled') return;
+      console.error('Download failed:', e);
+      toast.error(String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleDownload}
+      disabled={loading}
+      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium glass hover:bg-white/[0.05] text-white/60 hover:text-white/80 transition-all duration-200 cursor-pointer disabled:opacity-50"
+    >
+      {loading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+      {t('track.download')}
+    </button>
+  );
+});
+
 /* ── Main: TrackPage ─────────────────────────────────────── */
 
 export const TrackPage = React.memo(() => {
@@ -350,6 +374,12 @@ export const TrackPage = React.memo(() => {
   const { data: favoritersData } = useTrackFavoriters(urn, 12);
 
   const trackUrn = track?.urn;
+
+  // Seed liked status from API
+  useEffect(() => {
+    if (track?.user_favorite && track.urn) setLikedUrn(track.urn, true);
+  }, [track?.urn, track?.user_favorite]);
+
   const isThis = usePlayerStore((s) => !!trackUrn && s.currentTrack?.urn === trackUrn);
   const isThisPlaying = usePlayerStore(
     (s) => !!trackUrn && s.currentTrack?.urn === trackUrn && s.isPlaying,
@@ -467,18 +497,14 @@ export const TrackPage = React.memo(() => {
                 className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ease-[var(--ease-apple)] cursor-pointer shadow-[0_0_20px_var(--color-accent-glow)] ${
                   isThisPlaying
                     ? 'bg-white text-black hover:bg-white/90'
-                    : 'bg-accent text-white hover:bg-accent-hover active:scale-[0.97]'
+                    : 'bg-accent text-accent-contrast hover:bg-accent-hover active:scale-[0.97]'
                 }`}
               >
                 {isThisPlaying ? pauseCurrent16 : playCurrent16}
                 {isThisPlaying ? 'Pause' : 'Play'}
               </button>
 
-              <LikeBtn
-                trackUrn={track.urn}
-                initialLiked={track.user_favorite}
-                count={track.favoritings_count ?? track.likes_count}
-              />
+              <LikeBtn trackUrn={track.urn} count={track.favoritings_count ?? track.likes_count} />
               <RepostBtn trackUrn={track.urn} count={track.reposts_count} />
               <button
                 type="button"
@@ -488,7 +514,17 @@ export const TrackPage = React.memo(() => {
                 <Music size={16} />
                 {t('track.lyrics')}
               </button>
+              <AddToPlaylistDialog trackUrns={[track.urn]}>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium glass hover:bg-white/[0.05] text-white/60 hover:text-white/80 transition-all duration-200 cursor-pointer"
+                >
+                  <ListPlus size={16} />
+                  {t('playlist.addToPlaylist')}
+                </button>
+              </AddToPlaylistDialog>
               <CopyLinkButton url={track.permalink_url} />
+              <DownloadButton track={track} />
             </div>
           </div>
         </div>

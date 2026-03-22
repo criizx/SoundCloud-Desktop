@@ -8,6 +8,7 @@ import { art, formatTime } from '../../lib/formatters';
 import { invalidateAllLikesCache } from '../../lib/hooks';
 import { FullscreenPlayer } from '../music/FullscreenPlayer';
 import {
+  audioLines16,
   Heart,
   listMusic16,
   MicVocal,
@@ -25,6 +26,8 @@ import {
 import { optimisticToggleLike } from '../../lib/likes';
 import { useLyricsStore } from '../../stores/lyrics';
 import { type Track, usePlayerStore } from '../../stores/player';
+import { useSettingsStore } from '../../stores/settings';
+import { EqualizerPanel } from '../music/EqualizerPanel';
 
 /* ── Progress Slider ─────────────────────────────────────────── */
 
@@ -79,11 +82,14 @@ export const ProgressSlider = React.memo(() => {
       onValueCommit={onValueCommit}
     >
       <Slider.Track className="relative h-[3px] grow rounded-full bg-white/[0.08] group-hover:h-[5px] transition-all duration-150">
-        <Slider.Range ref={rangeRef} className="absolute h-full rounded-full bg-accent" />
+        <Slider.Range
+          ref={rangeRef}
+          className="absolute h-full rounded-full bg-accent will-change-transform"
+        />
       </Slider.Track>
       <Slider.Thumb
         ref={thumbRef}
-        className="block w-3 h-3 rounded-full bg-accent shadow-[0_0_10px_var(--color-accent-glow)] scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-150 outline-none"
+        className="block w-3 h-3 rounded-full bg-accent shadow-[0_0_10px_var(--color-accent-glow)] scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-150 outline-none will-change-transform"
       />
     </Slider.Root>
   );
@@ -104,6 +110,10 @@ const VolumeSlider = React.memo(({ className = '' }: { className?: string }) => 
         max={200}
         step={1}
         onValueChange={([v]) => setVolume(v)}
+        onKeyDown={(e) => {
+          // Prevent slider from reacting to Left/Right, let event bubble to global binds
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault();
+        }}
         onWheel={(e) => {
           e.preventDefault();
           setVolume(Math.max(0, Math.min(200, volume + (e.deltaY < 0 ? 2 : -2))));
@@ -131,12 +141,13 @@ const VolumeSlider = React.memo(({ className = '' }: { className?: string }) => 
 
 const ControlVolumeBtn = React.memo(({ size = 'default' }: { size?: 'default' | 'sm' }) => {
   const volume = usePlayerStore((s) => s.volume);
+  const volumeBeforeMute = usePlayerStore((s) => s.volumeBeforeMute);
   const setVolume = usePlayerStore((s) => s.setVolume);
   const s = size === 'sm' ? 'w-9 h-9' : 'w-10 h-10';
   return (
     <button
       type="button"
-      onClick={() => setVolume(volume > 0 ? 0 : 50)}
+      onClick={() => setVolume(volume > 0 ? 0 : volumeBeforeMute)}
       className={`${s} rounded-full flex items-center justify-center transition-all duration-150 ease-[var(--ease-apple)] cursor-pointer hover:bg-white/[0.04] ${
         volume === 0 ? 'text-accent' : 'text-white/40 hover:text-white/70'
       }`}
@@ -301,6 +312,17 @@ const LyricsBtn = React.memo(() => {
   );
 });
 
+const EqBtn = React.memo(() => {
+  const eqEnabled = useSettingsStore((s) => s.eqEnabled);
+  return (
+    <EqualizerPanel>
+      <button type="button" className={btnClass(eqEnabled, 'sm')}>
+        {audioLines16}
+      </button>
+    </EqualizerPanel>
+  );
+});
+
 /* ── Track Info (left section) ───────────────────────────────── */
 
 const TrackInfo = React.memo(() => {
@@ -341,12 +363,19 @@ const TrackInfo = React.memo(() => {
         </div>
       </div>
       <div className="min-w-0 flex-1">
-        <p
-          className="text-[13px] text-white/90 truncate font-medium cursor-pointer hover:text-white leading-tight transition-colors"
-          onClick={() => navigate(`/track/${encodeURIComponent(currentTrack.urn)}`)}
-        >
-          {currentTrack.title}
-        </p>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <p
+            className="text-[13px] text-white/90 truncate font-medium cursor-pointer hover:text-white leading-tight transition-colors"
+            onClick={() => navigate(`/track/${encodeURIComponent(currentTrack.urn)}`)}
+          >
+            {currentTrack.title}
+          </p>
+          {currentTrack.access === 'preview' && (
+            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide bg-amber-500/20 text-amber-400/90 px-1.5 py-px rounded">
+              Preview
+            </span>
+          )}
+        </div>
         <p
           className="text-[11px] text-white/35 truncate mt-1 cursor-pointer hover:text-white/55 transition-colors"
           onClick={() => navigate(`/user/${encodeURIComponent(currentTrack.user.urn)}`)}
@@ -374,6 +403,8 @@ const BackgroundGlow = React.memo(() => {
         backgroundImage: `url(${artwork})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
+        contain: 'strict',
+        transform: 'translateZ(0)',
       }}
     />
   );
@@ -386,31 +417,35 @@ export const NowPlayingBar = React.memo(
     return (
       <div className="shrink-0 relative">
         <BackgroundGlow />
-        <ProgressSlider />
+        {/* Isolated layer — repaints here won't cascade to blur background */}
+        <div className="relative" style={{ isolation: 'isolate' }}>
+          <ProgressSlider />
 
-        <div className="h-[76px] flex items-center px-5 gap-3 relative">
-          {/* Left: track info */}
-          <TrackInfo />
+          <div className="h-[76px] flex items-center px-5 gap-3 relative">
+            {/* Left: track info */}
+            <TrackInfo />
 
-          {/* Center: controls */}
-          <div className="flex-1 flex flex-col items-center gap-0.5">
-            <div className="flex items-center gap-0.5">
-              <ShuffleBtn />
-              <PrevBtn />
-              <PlayPauseBtn />
-              <NextBtn />
-              <RepeatBtn />
+            {/* Center: controls */}
+            <div className="flex-1 flex flex-col items-center gap-0.5">
+              <div className="flex items-center gap-0.5">
+                <ShuffleBtn />
+                <PrevBtn />
+                <PlayPauseBtn />
+                <NextBtn />
+                <RepeatBtn />
+              </div>
+              <ProgressTime />
             </div>
-            <ProgressTime />
-          </div>
 
-          {/* Right: volume + queue */}
-          <div className="flex items-center gap-0.5 w-[220px] justify-end">
-            <LyricsBtn />
-            <QueueBtn onClick={onQueueToggle} active={queueOpen} />
-            <ControlVolumeBtn size="sm" />
-            <VolumeSlider className="w-[100px]" />
-            <VolumeLabel />
+            {/* Right: volume + queue */}
+            <div className="flex items-center gap-0.5 w-[250px] justify-end">
+              <EqBtn />
+              <LyricsBtn />
+              <QueueBtn onClick={onQueueToggle} active={queueOpen} />
+              <ControlVolumeBtn size="sm" />
+              <VolumeSlider className="w-[100px]" />
+              <VolumeLabel />
+            </div>
           </div>
         </div>
       </div>

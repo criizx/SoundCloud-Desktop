@@ -53,13 +53,16 @@ export const Titlebar = React.memo(() => {
       {/* spacer for macOS traffic lights — hidden in fullscreen */}
       {isMac && !isFullscreen && <div className="w-[70px] shrink-0" data-tauri-drag-region />}
 
-      <div className="flex items-center gap-1.5" data-tauri-drag-region>
+      <div className="flex items-center gap-1.5">
         <Disc3 size={14} className="text-accent" strokeWidth={2} />
         <span className="text-[11px] font-semibold tracking-tight text-white/30">SoundCloud</span>
         <div className="ml-1">
           <NavButtons />
         </div>
       </div>
+
+      {/* fills remaining space — drag region */}
+      <div className="flex-1 h-full" data-tauri-drag-region />
     </div>
   );
 });

@@ -4,7 +4,9 @@
     "search": "Поиск",
     "library": "Библиотека",
     "following": "Подписки",
-    "settings": "Настройки"
+    "settings": "Настройки",
+    "collapse": "Свернуть",
+    "expand": "Развернуть"
   },
   "player": {
     "queue": "Очередь",
@@ -47,7 +49,10 @@
     "lyrics": "Текст песни",
     "lyricsNotFound": "Текст не найден",
     "lyricsNotFoundHint": "Попробуйте поискать на Genius.com",
-    "lyricsLoading": "Ищем текст..."
+    "lyricsLoading": "Ищем текст...",
+    "download": "Скачать",
+    "downloaded": "Скачано",
+    "preview": "Превью"
   },
   "playlist": {
     "playAll": "Воспроизвести",
@@ -56,7 +61,24 @@
     "tracks_few": "{{count}} трека",
     "tracks_many": "{{count}} треков",
     "by": "от",
-    "noTracks": "В этом плейлисте нет треков"
+    "noTracks": "В этом плейлисте нет треков",
+    "removeTrack": "Удалить из плейлиста",
+    "trackRemoved": "Трек удалён",
+    "reordered": "Порядок треков сохранён",
+    "addToPlaylist": "Добавить в плейлист",
+    "addedToPlaylist": "Добавлено в плейлист",
+    "selectPlaylist": "Выбрать плейлист",
+    "noPlaylists": "Плейлисты не найдены",
+    "newPlaylist": "Новый плейлист",
+    "playlistName": "Название плейлиста",
+    "create": "Создать",
+    "creating": "Создаём...",
+    "created": "Плейлист создан",
+    "delete": "Удалить плейлист",
+    "deleteConfirm": "Удалить «{{title}}»? Это действие нельзя отменить.",
+    "deleted": "Плейлист удалён",
+    "private": "Приватный",
+    "public": "Публичный"
   },
   "user": {
     "followers": "Подписчики",
@@ -76,8 +98,19 @@
     "likedTracks": "Любимые треки",
     "likedPlaylists": "Любимые плейлисты",
     "yourPlaylists": "Ваши плейлисты",
+    "localLikes": "Локальные",
+    "noLocalLikes": "Нет локальных лайков",
     "history": "История",
-    "historyEmpty": "История пуста"
+    "historyEmpty": "История прослушивания пуста",
+    "clearHistory": "Очистить историю",
+    "today": "Сегодня",
+    "yesterday": "Вчера",
+    "earlier": "Ранее",
+    "filter": "Фильтр...",
+    "noMatches": "Ничего не найдено",
+    "noLikedTracks": "Нет любимых треков",
+    "notFollowing": "Вы ни на кого не подписаны",
+    "noPlaylists": "Плейлисты не найдены"
   },
   "home": {
     "goodMorning": "Доброе утро",
@@ -111,18 +144,29 @@
     "bgLoadError": "Не удалось загрузить изображение",
     "bgOpacity": "Прозрачность фона",
     "resetDefaults": "Сбросить",
+    "account": "Аккаунт",
+    "language": "Язык",
+    "audioDevice": "Аудиовыход",
+    "audioDeviceDefault": "Системный по умолчанию",
+    "audioDeviceSwitched": "Аудиоустройство переключено",
+    "themePreset": "Тема",
+    "theme_soundcloud": "SoundCloud",
+    "theme_dark": "Тёмная",
+    "theme_neon": "Неон",
+    "theme_forest": "Лес",
+    "theme_crimson": "Малиновая",
+    "themeCustom": "Своя",
     "playback": "Воспроизведение",
-    "trackTransition": "Переход между треками",
-    "transitionOff": "Без перехода",
-    "transitionFade": "Fade",
-    "transitionDuration": "Длительность перехода",
-    "seconds": "сек",
-    "account": "Аккаунт"
+    "floatingComments": "Плавающие комментарии",
+    "floatingCommentsDesc": "Показывать комментарии как всплывающие пилюли во время воспроизведения",
+    "import": "Импорт",
+    "importYandex": "Импорт из Yandex Music"
   },
   "common": {
     "loading": "Загрузка...",
     "error": "Что-то пошло не так",
     "retry": "Повторить",
-    "seeAll": "Показать все"
+    "seeAll": "Показать все",
+    "cancel": "Отмена"
   }
 }
