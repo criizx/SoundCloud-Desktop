@@ -40,7 +40,6 @@ const TrackRow = React.memo(
     const { isThis, isThisPlaying, togglePlay } = useTrackPlay(track, queue);
     const cover = art(track.artwork_url, 't200x200');
 
-
     return (
       <div
         className={`group flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-300 ease-[var(--ease-apple)] ${
@@ -125,7 +124,6 @@ const TrackRow = React.memo(
             </button>
           </AddToPlaylistDialog>
         </div>
-
 
         <span className="text-[12px] text-white/30 tabular-nums font-medium shrink-0 w-12 text-right">
           {dur(track.duration)}

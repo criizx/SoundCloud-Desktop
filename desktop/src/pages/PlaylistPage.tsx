@@ -146,7 +146,6 @@ const SortableTrackRow = React.memo(
       zIndex: isDragging ? 50 : undefined,
     };
 
-
     return (
       <div
         ref={setNodeRef}

@@ -45,13 +45,17 @@ export const Titlebar = React.memo(() => {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
+  // On Windows/Linux the system titlebar is used (decorations: true),
+  // so we render nothing — the system handles window controls.
+  if (!isMac) return null;
+
   return (
     <div
       className="h-10 flex items-center px-4 select-none shrink-0 border-b border-white/[0.04]"
       data-tauri-drag-region
     >
       {/* spacer for macOS traffic lights — hidden in fullscreen */}
-      {isMac && !isFullscreen && <div className="w-[70px] shrink-0" data-tauri-drag-region />}
+      {!isFullscreen && <div className="w-[70px] shrink-0" data-tauri-drag-region />}
 
       <div className="flex items-center gap-1.5">
         <Disc3 size={14} className="text-accent" strokeWidth={2} />
