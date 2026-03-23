@@ -353,7 +353,7 @@ export const TrackPage = React.memo(() => {
     queryKey: ['track', urn],
     queryFn: () => api<Track>(`/tracks/${encodeURIComponent(urn!)}`),
     enabled: !!urn,
-    refetchOnMount: 'always',
+    staleTime: 30_000,
   });
 
   const {

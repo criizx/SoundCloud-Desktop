@@ -1,16 +1,21 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router-dom';
+import { useShallow } from 'zustand/shallow';
+import { changeAppLanguage } from '../../i18n';
 import {
   Clock,
   Globe,
   Home,
   Library,
+  ListMusic,
+  MapPin,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   Settings,
 } from '../../lib/icons';
+import { art } from '../../lib/formatters';
 import { useAuthStore } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settings';
 import { Avatar } from '../ui/Avatar';
@@ -22,21 +27,25 @@ const languages = [
 ] as const;
 
 const navItems = [
-  { to: '/', icon: Home, label: 'nav.home' },
+  { to: '/home', icon: Home, label: 'nav.home' },
   { to: '/search', icon: Search, label: 'nav.search' },
   { to: '/library', icon: Library, label: 'nav.library' },
-  { to: '/library?tab=history', icon: Clock, label: 'library.history' },
 ];
 
 export const Sidebar = React.memo(() => {
   const { t, i18n } = useTranslation();
   const user = useAuthStore((s) => s.user);
-  const collapsed = useSettingsStore((s) => s.sidebarCollapsed);
-  const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
+  const { collapsed, pinnedPlaylists, toggleSidebar } = useSettingsStore(
+    useShallow((s) => ({
+      collapsed: s.sidebarCollapsed,
+      pinnedPlaylists: s.pinnedPlaylists,
+      toggleSidebar: s.toggleSidebar,
+    })),
+  );
 
   const toggleLanguage = () => {
     const next = i18n.language === 'ru' ? 'en' : 'ru';
-    i18n.changeLanguage(next);
+    void changeAppLanguage(next);
   };
 
   const currentLang = languages.find((l) => l.code === i18n.language) ?? languages[0];
@@ -67,6 +76,66 @@ export const Sidebar = React.memo(() => {
           </NavLink>
         ))}
       </nav>
+
+      <div className="px-2 pt-4 space-y-1">
+        {!collapsed && (
+          <div className="px-3 pb-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-white/20 font-semibold">
+            <MapPin size={11} strokeWidth={1.8} />
+            {t('sidebar.quickAccess')}
+          </div>
+        )}
+
+        <NavLink
+          to="/library?tab=history"
+          title={collapsed ? t('library.history') : undefined}
+          className={({ isActive }) =>
+            `flex items-center gap-2.5 w-full rounded-xl text-[12px] font-medium transition-all duration-200 ${
+              collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
+            } ${
+              isActive
+                ? 'text-white bg-white/[0.07]'
+                : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
+            }`
+          }
+        >
+          <Clock size={16} strokeWidth={1.8} />
+          {!collapsed && <span className="truncate">{t('library.history')}</span>}
+        </NavLink>
+
+        {pinnedPlaylists.map((playlist) => {
+          const artwork = art(playlist.artworkUrl, 'small');
+
+          return (
+            <NavLink
+              key={playlist.urn}
+              to={`/playlist/${encodeURIComponent(playlist.urn)}`}
+              title={collapsed ? playlist.title : undefined}
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 w-full rounded-xl text-[12px] font-medium transition-all duration-200 ${
+                  collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5'
+                } ${
+                  isActive
+                    ? 'text-white bg-white/[0.07]'
+                    : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]'
+                }`
+              }
+            >
+              {artwork ? (
+                <img
+                  src={artwork}
+                  alt=""
+                  className="w-4 h-4 rounded-[4px] object-cover shrink-0 ring-1 ring-white/[0.08]"
+                  decoding="async"
+                  loading="lazy"
+                />
+              ) : (
+                <ListMusic size={16} strokeWidth={1.8} />
+              )}
+              {!collapsed && <span className="truncate">{playlist.title}</span>}
+            </NavLink>
+          );
+        })}
+      </div>
 
       <div className="flex-1" />
 

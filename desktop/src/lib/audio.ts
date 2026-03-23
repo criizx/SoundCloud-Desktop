@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { Track } from '../stores/player';
 import { usePlayerStore } from '../stores/player';
@@ -6,6 +5,7 @@ import { useSettingsStore } from '../stores/settings';
 import { api, getSessionId } from './api';
 import { fetchAndCacheTrack, getCacheFilePath, isCached } from './cache';
 import { API_BASE } from './constants';
+import { trackedInvoke as invoke } from './diagnostics';
 import { art } from './formatters';
 
 /* ── Audio engine state ──────────────────────────────────────── */
@@ -16,9 +16,6 @@ let fallbackDuration = 0;
 let cachedTime = 0;
 let cachedDuration = 0;
 let loadGen = 0;
-let lastTickAt = 0;
-// @ts-expect-error — used for stall detection interval
-let stallCheckTimer: ReturnType<typeof setInterval> | null = null; // eslint-disable-line
 const listeners = new Set<() => void>();
 
 function notify() {
@@ -62,6 +59,14 @@ function stopTrack() {
   cachedTime = 0;
 }
 
+export async function switchAudioDevice(deviceName: string | null, manual = false) {
+  if (manual) {
+    await invoke('audio_set_follow_default_output', { follow: deviceName == null });
+  }
+
+  await invoke('audio_switch_device', { deviceName });
+}
+
 /** Reload the current track on new audio device, preserving position */
 export async function reloadCurrentTrack() {
   const track = usePlayerStore.getState().currentTrack;
@@ -85,8 +90,9 @@ async function loadTrack(track: Track) {
   notify();
 
   // Sync EQ state to Rust
-  const { eqEnabled, eqGains } = useSettingsStore.getState();
+  const { eqEnabled, eqGains, normalizeVolume } = useSettingsStore.getState();
   invoke('audio_set_eq', { enabled: eqEnabled, gains: eqGains }).catch(console.error);
+  invoke('audio_set_normalization', { enabled: normalizeVolume }).catch(console.error);
 
   // Sync volume
   invoke('audio_set_volume', { volume: usePlayerStore.getState().volume }).catch(console.error);
@@ -178,7 +184,6 @@ function handleTrackEnd() {
 
 listen<number>('audio:tick', (event) => {
   cachedTime = event.payload;
-  lastTickAt = Date.now();
   if (cachedDuration <= 0) cachedDuration = fallbackDuration;
   notify();
 });
@@ -189,56 +194,11 @@ listen('audio:ended', () => {
 });
 
 listen('audio:device-reconnected', () => {
-  console.log('[Audio] Device reconnected (BT profile switch?), reloading track...');
-  void reloadCurrentTrack();
+  console.log('[Audio] Device reconnected');
 });
 
-
-// Fallback stall detector: if playing but no ticks for 2s, assume device died and reload
-const STALL_THRESHOLD_MS = 2000;
-const STALL_COOLDOWN_MS = 10000; // after a stall reload, wait 10s before detecting again
-let stallCooldownUntil = 0;
-let resumeGuardUntil = 0; // suppress stall detection right after visibility resume
-stallCheckTimer = setInterval(() => {
-  if (!hasTrack || !lastTickAt) return;
-  const { isPlaying } = usePlayerStore.getState();
-  if (!isPlaying) return;
-  const now = Date.now();
-  if (now < stallCooldownUntil || now < resumeGuardUntil) return;
-  const elapsed = now - lastTickAt;
-  if (elapsed > STALL_THRESHOLD_MS) {
-    console.log(`[Audio] Stall detected (no ticks for ${elapsed}ms), reloading track...`);
-    lastTickAt = now; // prevent re-trigger
-    stallCooldownUntil = now + STALL_COOLDOWN_MS;
-    void reloadCurrentTrack();
-  }
-}, 1000);
-
-// On visibility resume after long idle, force device reconnect before playing
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    // Suppress stall detector for 5s after resume to give audio time to warm up
-    resumeGuardUntil = Date.now() + 5000;
-    // If we had a track and were playing, verify audio is alive
-    if (hasTrack && usePlayerStore.getState().isPlaying && lastTickAt > 0) {
-      const idle = Date.now() - lastTickAt;
-      // If no ticks for >30s, audio device is likely dead — force reconnect
-      if (idle > 30000) {
-        console.log(
-          `[Audio] Resuming after ${Math.round(idle / 1000)}s idle, forcing device reconnect...`,
-        );
-        invoke('audio_switch_device', { deviceName: null })
-          .then(() => {
-            console.log('[Audio] Device reconnected after idle, reloading track...');
-            void reloadCurrentTrack();
-          })
-          .catch((e) => {
-            console.error('[Audio] Device reconnect failed:', e);
-            void reloadCurrentTrack();
-          });
-      }
-    }
-  }
+listen<string>('audio:default-device-changed', (event) => {
+  console.log(`[Audio] Default output changed to '${event.payload}'`);
 });
 
 /* ── Store subscriber ────────────────────────────────────────── */
@@ -284,6 +244,13 @@ usePlayerStore.subscribe((state, prev) => {
 useSettingsStore.subscribe((state, prev) => {
   if (state.eqEnabled !== prev.eqEnabled || state.eqGains !== prev.eqGains) {
     invoke('audio_set_eq', { enabled: state.eqEnabled, gains: state.eqGains }).catch(console.error);
+  }
+
+  if (state.normalizeVolume !== prev.normalizeVolume) {
+    invoke('audio_set_normalization', { enabled: state.normalizeVolume }).catch(console.error);
+    if (usePlayerStore.getState().currentTrack) {
+      void reloadCurrentTrack();
+    }
   }
 });
 

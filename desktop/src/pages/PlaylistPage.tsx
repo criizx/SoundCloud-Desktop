@@ -15,8 +15,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useShallow } from 'zustand/shallow';
 import { LikeButton } from '../components/music/LikeButton';
 import { CopyLinkButton } from '../components/ui/CopyLinkButton';
+import { VirtualList } from '../components/ui/VirtualList';
 import { api } from '../lib/api';
 import { preloadTrack } from '../lib/audio';
 import { art, dateFormatted, dur, durLong, fc } from '../lib/formatters';
@@ -38,6 +40,7 @@ import {
   ListPlus,
   ListMusic,
   Loader2,
+  MapPin,
   musicIcon12,
   pauseBlack22,
   pauseCurrent16,
@@ -52,6 +55,7 @@ import {
 import { useTrackPlay } from '../lib/useTrackPlay';
 import { useAuthStore } from '../stores/auth';
 import { type Track, usePlayerStore } from '../stores/player';
+import { useSettingsStore } from '../stores/settings';
 
 /* ── Playlist Like Button ─────────────────────────────────── */
 
@@ -187,7 +191,7 @@ const SortableTrackRow = React.memo(
         {/* Artwork */}
         <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 ring-1 ring-white/[0.06]">
           {cover ? (
-            <img src={cover} alt="" className="w-full h-full object-cover" />
+            <img src={cover} alt="" className="w-full h-full object-cover" decoding="async" loading="lazy" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-white/[0.03]">
               {musicIcon12}
@@ -298,7 +302,7 @@ const TrackRow = React.memo(
         {/* Artwork */}
         <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 ring-1 ring-white/[0.06]">
           {cover ? (
-            <img src={cover} alt="" className="w-full h-full object-cover" />
+            <img src={cover} alt="" className="w-full h-full object-cover" decoding="async" loading="lazy" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-white/[0.03]">
               {musicIcon12}
@@ -382,9 +386,17 @@ export const PlaylistPage = React.memo(() => {
   const updateTracks = useUpdatePlaylistTracks(urn);
   const deletePlaylist = useDeletePlaylist();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { pinnedPlaylists, pinPlaylist, unpinPlaylist } = useSettingsStore(
+    useShallow((s) => ({
+      pinnedPlaylists: s.pinnedPlaylists,
+      pinPlaylist: s.pinPlaylist,
+      unpinPlaylist: s.unpinPlaylist,
+    })),
+  );
 
   const isLoading = playlistLoading || tracksLoading;
   const isOwner = !!playlist && !!myUrn && playlist.user.urn === myUrn;
+  const isPinned = pinnedPlaylists.some((item) => item.urn === playlist?.urn);
 
   const serverTracks: Track[] = React.useMemo(() => {
     if (isLoading || !playlist) return [];
@@ -428,11 +440,11 @@ export const PlaylistPage = React.memo(() => {
   const tracks = isOwner ? localTracks : serverTracks;
 
   const trackUrnSet = React.useMemo(() => new Set(tracks.map((t) => t.urn)), [tracks]);
-  const isPlayingFromThis = usePlayerStore(
-    (s) => s.isPlaying && s.currentTrack != null && trackUrnSet.has(s.currentTrack.urn),
-  );
-  const isPausedFromThis = usePlayerStore(
-    (s) => !s.isPlaying && s.currentTrack != null && trackUrnSet.has(s.currentTrack.urn),
+  const { isPausedFromThis, isPlayingFromThis } = usePlayerStore(
+    useShallow((s) => ({
+      isPlayingFromThis: s.isPlaying && s.currentTrack != null && trackUrnSet.has(s.currentTrack.urn),
+      isPausedFromThis: !s.isPlaying && s.currentTrack != null && trackUrnSet.has(s.currentTrack.urn),
+    })),
   );
 
   const scrollRef = useInfiniteScroll(hasNextPage ?? false, isFetchingNextPage, fetchNextPage);
@@ -461,6 +473,23 @@ export const PlaylistPage = React.memo(() => {
     const newTracks = localTracks.filter((t) => t.urn !== trackUrn);
     setLocalTracks(newTracks);
     debouncedUpdate(newTracks, t('playlist.trackRemoved'));
+  };
+
+  const handleTogglePin = () => {
+    if (!playlist) return;
+
+    if (isPinned) {
+      unpinPlaylist(playlist.urn);
+      toast.success(t('sidebar.unpinned'));
+      return;
+    }
+
+    pinPlaylist({
+      urn: playlist.urn,
+      title: playlist.title,
+      artworkUrl: playlist.artwork_url ?? tracks[0]?.artwork_url ?? null,
+    });
+    toast.success(t('sidebar.pinned'));
   };
 
   if (isLoading || !playlist) {
@@ -611,6 +640,18 @@ export const PlaylistPage = React.memo(() => {
                 <Shuffle size={16} />
                 {t('playlist.shuffle')}
               </button>
+              <button
+                type="button"
+                onClick={handleTogglePin}
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ease-[var(--ease-apple)] cursor-pointer ${
+                  isPinned
+                    ? 'bg-white/[0.08] text-white/85 border border-white/[0.12]'
+                    : 'glass hover:bg-white/[0.05] text-white/60 hover:text-white/80'
+                }`}
+              >
+                <MapPin size={16} />
+                {isPinned ? t('sidebar.unpinPlaylist') : t('sidebar.pinPlaylist')}
+              </button>
               <PlaylistLikeBtn playlistUrn={playlist.urn} count={playlist.likes_count} />
               <CopyLinkButton url={playlist.permalink_url} />
               {isOwner && (
@@ -725,9 +766,15 @@ export const PlaylistPage = React.memo(() => {
             </div>
             <div className="h-px bg-white/[0.04] mx-4 mb-1" />
 
-            {tracks.map((track, i) => (
-              <TrackRow key={track.urn} track={track} index={i} queue={tracks} />
-            ))}
+            <VirtualList
+              items={tracks}
+              rowHeight={84}
+              overscan={10}
+              className="space-y-0.5"
+              disabled={tracks.length < 60}
+              getItemKey={(track) => track.urn}
+              renderItem={(track, i) => <TrackRow track={track} index={i} queue={tracks} />}
+            />
             {hasNextPage && (
               <div ref={scrollRef} className="flex justify-center py-4">
                 {isFetchingNextPage && <Loader2 size={20} className="animate-spin text-white/30" />}

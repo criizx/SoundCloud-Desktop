@@ -1,9 +1,9 @@
-import { invoke } from '@tauri-apps/api/core';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { changeAppLanguage } from '../i18n';
 import { toast } from 'sonner';
 import { Skeleton } from '../components/ui/Skeleton.tsx';
-import { reloadCurrentTrack } from '../lib/audio';
+import { switchAudioDevice } from '../lib/audio';
 import {
   clearAssetsCache,
   clearCache,
@@ -15,9 +15,15 @@ import {
   removeWallpaper,
   saveWallpaperFromBuffer,
 } from '../lib/cache';
+import { trackedInvoke } from '../lib/diagnostics';
 import { Globe, Link, Loader2, Trash2, X } from '../lib/icons';
 import { useAuthStore } from '../stores/auth';
-import { THEME_PRESETS, useSettingsStore } from '../stores/settings';
+import {
+  THEME_PRESETS,
+  useSettingsStore,
+  type DiscordRpcMode,
+  type StartupPage,
+} from '../stores/settings';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -46,6 +52,19 @@ const LANGUAGES = [
   { code: 'tr', label: 'Turkce' },
 ] as const;
 
+const STARTUP_PAGES: Array<{ id: StartupPage; labelKey: string }> = [
+  { id: 'home', labelKey: 'nav.home' },
+  { id: 'search', labelKey: 'nav.search' },
+  { id: 'library', labelKey: 'nav.library' },
+  { id: 'settings', labelKey: 'nav.settings' },
+];
+
+const DISCORD_RPC_MODES: Array<{ id: DiscordRpcMode; labelKey: string }> = [
+  { id: 'track', labelKey: 'settings.discordRpcModeTrack' },
+  { id: 'artist', labelKey: 'settings.discordRpcModeArtist' },
+  { id: 'activity', labelKey: 'settings.discordRpcModeActivity' },
+];
+
 /* ── Language Section ─────────────────────────────────────── */
 
 const LanguageSection = React.memo(function LanguageSection() {
@@ -60,7 +79,7 @@ const LanguageSection = React.memo(function LanguageSection() {
         {LANGUAGES.map((lang) => (
           <button
             key={lang.code}
-            onClick={() => i18n.changeLanguage(lang.code)}
+            onClick={() => void changeAppLanguage(lang.code)}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 cursor-pointer border ${
               i18n.language === lang.code
                 ? 'bg-white/[0.1] text-white/90 border-white/[0.15]'
@@ -122,6 +141,8 @@ function CacheRow({
 
 const CacheSection = React.memo(function CacheSection() {
   const { t } = useTranslation();
+  const audioCacheLimitMB = useSettingsStore((s) => s.audioCacheLimitMB);
+  const setAudioCacheLimitMB = useSettingsStore((s) => s.setAudioCacheLimitMB);
   const [audioSize, setAudioSize] = useState<number | null>(null);
   const [assetsSize, setAssetsSize] = useState<number | null>(null);
   const [clearingAudio, setClearingAudio] = useState(false);
@@ -159,6 +180,12 @@ const CacheSection = React.memo(function CacheSection() {
   }, [t]);
 
   const totalSize = (audioSize ?? 0) + (assetsSize ?? 0);
+  const limitLabel =
+    audioCacheLimitMB <= 0
+      ? t('settings.unlimited')
+      : audioCacheLimitMB >= 1024
+        ? `${(audioCacheLimitMB / 1024).toFixed(audioCacheLimitMB % 1024 === 0 ? 0 : 1)} GB`
+        : `${audioCacheLimitMB} MB`;
 
   return (
     <section className="bg-white/[0.02] border border-white/[0.05] backdrop-blur-[60px] rounded-3xl p-6 shadow-xl space-y-2">
@@ -192,6 +219,25 @@ const CacheSection = React.memo(function CacheSection() {
         onClear={handleClearAssets}
         t={t}
       />
+      <div className="border-t border-white/[0.04]" />
+      <div className="pt-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[13px] text-white/60 font-medium">{t('settings.audioCacheLimit')}</p>
+            <p className="text-[11px] text-white/30 mt-0.5">{t('settings.audioCacheLimitDesc')}</p>
+          </div>
+          <span className="text-[12px] text-white/30 tabular-nums">{limitLabel}</span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={8192}
+          step={256}
+          value={audioCacheLimitMB}
+          onChange={(e) => setAudioCacheLimitMB(Number(e.target.value))}
+          className="w-full accent-[var(--color-accent)] h-1 bg-white/10 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-lg"
+        />
+      </div>
     </section>
   );
 });
@@ -561,7 +607,7 @@ const AudioDeviceSection = React.memo(function AudioDeviceSection() {
   const [switching, setSwitching] = useState(false);
 
   const refreshSinks = React.useCallback(() => {
-    invoke<AudioSink[]>('audio_list_devices').then(setSinks).catch(console.error);
+    trackedInvoke<AudioSink[]>('audio_list_devices').then(setSinks).catch(console.error);
   }, []);
 
   // Refresh on mount + when window regains focus (device may have changed)
@@ -577,9 +623,8 @@ const AudioDeviceSection = React.memo(function AudioDeviceSection() {
     if (switching || current?.name === sinkName) return;
     setSwitching(true);
     try {
-      await invoke('audio_switch_device', { deviceName: sinkName });
+      await switchAudioDevice(sinkName, true);
       setSinks((prev) => prev.map((s) => ({ ...s, is_default: s.name === sinkName })));
-      await reloadCurrentTrack();
       toast.success(t('settings.audioDeviceSwitched'));
     } catch (err) {
       toast.error(String(err));
@@ -615,13 +660,55 @@ const AudioDeviceSection = React.memo(function AudioDeviceSection() {
   );
 });
 
+const StartupSection = React.memo(function StartupSection() {
+  const { t } = useTranslation();
+  const startupPage = useSettingsStore((s) => s.startupPage);
+  const setStartupPage = useSettingsStore((s) => s.setStartupPage);
+
+  return (
+    <section className="bg-white/[0.02] border border-white/[0.05] backdrop-blur-[60px] rounded-3xl p-6 shadow-xl space-y-4">
+      <div>
+        <h3 className="text-[15px] font-bold text-white/80 tracking-tight">
+          {t('settings.startup')}
+        </h3>
+        <p className="text-[12px] text-white/35 mt-1">{t('settings.startupPageDesc')}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {STARTUP_PAGES.map((page) => {
+          const active = startupPage === page.id;
+          return (
+            <button
+              key={page.id}
+              onClick={() => setStartupPage(page.id)}
+              className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 cursor-pointer ${
+                active
+                  ? 'border-white/[0.16] bg-white/[0.08] text-white/90'
+                  : 'border-white/[0.05] bg-white/[0.02] text-white/45 hover:bg-white/[0.05] hover:text-white/70'
+              }`}
+            >
+              <span className="text-[13px] font-semibold">{t(page.labelKey)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+});
+
 /* ── Playback Section ─────────────────────────────────── */
 
 const PlaybackSection = React.memo(function PlaybackSection() {
   const { t } = useTranslation();
   const floatingComments = useSettingsStore((s) => s.floatingComments);
   const setFloatingComments = useSettingsStore((s) => s.setFloatingComments);
-
+  const normalizeVolume = useSettingsStore((s) => s.normalizeVolume);
+  const setNormalizeVolume = useSettingsStore((s) => s.setNormalizeVolume);
+  const discordRpcEnabled = useSettingsStore((s) => s.discordRpcEnabled);
+  const setDiscordRpcEnabled = useSettingsStore((s) => s.setDiscordRpcEnabled);
+  const discordRpcMode = useSettingsStore((s) => s.discordRpcMode);
+  const setDiscordRpcMode = useSettingsStore((s) => s.setDiscordRpcMode);
+  const discordRpcShowButton = useSettingsStore((s) => s.discordRpcShowButton);
+  const setDiscordRpcShowButton = useSettingsStore((s) => s.setDiscordRpcShowButton);
   return (
     <section className="bg-white/[0.02] border border-white/[0.05] backdrop-blur-[60px] rounded-3xl p-6 shadow-xl space-y-5">
       <h3 className="text-[15px] font-bold text-white/80 tracking-tight">
@@ -646,6 +733,99 @@ const PlaybackSection = React.memo(function PlaybackSection() {
             }`}
           />
         </button>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[13px] text-white/70 font-medium">{t('settings.normalizeVolume')}</p>
+          <p className="text-[11px] text-white/30 mt-0.5">{t('settings.normalizeVolumeDesc')}</p>
+        </div>
+        <button
+          onClick={() => setNormalizeVolume(!normalizeVolume)}
+          className={`w-11 h-6 rounded-full transition-all duration-200 cursor-pointer relative ${
+            normalizeVolume ? 'bg-accent' : 'bg-white/10'
+          }`}
+        >
+          <div
+            className={`absolute top-0.5 w-5 h-5 rounded-full shadow-md transition-all duration-200 ${
+              normalizeVolume ? 'left-[22px] bg-accent-contrast' : 'left-0.5 bg-white'
+            }`}
+          />
+        </button>
+      </div>
+
+      <div className="border-t border-white/[0.04]" />
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[13px] text-white/70 font-medium">{t('settings.discordRpc')}</p>
+            <p className="text-[11px] text-white/30 mt-0.5">{t('settings.discordRpcDesc')}</p>
+          </div>
+          <button
+            onClick={() => setDiscordRpcEnabled(!discordRpcEnabled)}
+            className={`w-11 h-6 rounded-full transition-all duration-200 cursor-pointer relative ${
+              discordRpcEnabled ? 'bg-accent' : 'bg-white/10'
+            }`}
+          >
+            <div
+              className={`absolute top-0.5 w-5 h-5 rounded-full shadow-md transition-all duration-200 ${
+                discordRpcEnabled ? 'left-[22px] bg-accent-contrast' : 'left-0.5 bg-white'
+              }`}
+            />
+          </button>
+        </div>
+
+        {discordRpcEnabled && (
+          <>
+            <div className="space-y-2">
+              <p className="text-[13px] text-white/50 font-medium">
+                {t('settings.discordRpcMode')}
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {DISCORD_RPC_MODES.map((mode) => {
+                  const active = discordRpcMode === mode.id;
+                  return (
+                    <button
+                      key={mode.id}
+                      onClick={() => setDiscordRpcMode(mode.id)}
+                      className={`rounded-2xl border px-3 py-2.5 text-[12px] font-semibold transition-all duration-200 cursor-pointer ${
+                        active
+                          ? 'border-white/[0.16] bg-white/[0.08] text-white/90'
+                          : 'border-white/[0.05] bg-white/[0.02] text-white/45 hover:bg-white/[0.05] hover:text-white/70'
+                      }`}
+                    >
+                      {t(mode.labelKey)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[13px] text-white/70 font-medium">
+                  {t('settings.discordRpcButton')}
+                </p>
+                <p className="text-[11px] text-white/30 mt-0.5">
+                  {t('settings.discordRpcButtonDesc')}
+                </p>
+              </div>
+              <button
+                onClick={() => setDiscordRpcShowButton(!discordRpcShowButton)}
+                className={`w-11 h-6 rounded-full transition-all duration-200 cursor-pointer relative ${
+                  discordRpcShowButton ? 'bg-accent' : 'bg-white/10'
+                }`}
+              >
+                <div
+                  className={`absolute top-0.5 w-5 h-5 rounded-full shadow-md transition-all duration-200 ${
+                    discordRpcShowButton ? 'left-[22px] bg-accent-contrast' : 'left-0.5 bg-white'
+                  }`}
+                />
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </section>
   );
@@ -710,6 +890,7 @@ export function Settings() {
       <LanguageSection />
       <CacheSection />
       <ThemeSection />
+      <StartupSection />
       <PlaybackSection />
       <AudioDeviceSection />
       <ImportSection />

@@ -1,18 +1,27 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useNavigate } from 'react-router-dom';
+import { useShallow } from 'zustand/shallow';
 import { getCurrentTime, getDuration, handlePrev, seek } from '../../lib/audio';
 import { getWallpaperUrl } from '../../lib/cache';
 import { art } from '../../lib/formatters';
 import { useLyricsStore } from '../../stores/lyrics';
 import { usePlayerStore } from '../../stores/player';
 import { useSettingsStore } from '../../stores/settings';
-import { ArtworkPanel, LyricsPanel } from '../music/LyricsPanel';
-import { QueuePanel } from '../music/QueuePanel';
 import { NowPlayingBar } from './NowPlayingBar';
 import { Sidebar } from './Sidebar';
 import { Titlebar } from './Titlebar';
+
+const ArtworkPanel = lazy(() =>
+  import('../music/LyricsPanel').then((module) => ({ default: module.ArtworkPanel })),
+);
+const LyricsPanel = lazy(() =>
+  import('../music/LyricsPanel').then((module) => ({ default: module.LyricsPanel })),
+);
+const QueuePanel = lazy(() =>
+  import('../music/QueuePanel').then((module) => ({ default: module.QueuePanel })),
+);
 
 /* ── Keybinding definitions ────────────────────────────────── */
 
@@ -52,6 +61,13 @@ const groupLabels = {
   navigation: 'kb.groupNavigation',
   panels: 'kb.groupPanels',
 } as const;
+
+function getVolumeStep(repeatCount: number): number {
+  if (repeatCount < 4) return 1;
+  if (repeatCount < 10) return 2;
+  if (repeatCount < 18) return 4;
+  return 8;
+}
 
 /* ── Keybindings dialog ───────────────────────────────────── */
 
@@ -133,8 +149,12 @@ const KeybindingsDialog = React.memo(
 /* ── Backgrounds ───────────────────────────────────────────── */
 
 const CustomBackground = React.memo(() => {
-  const bgName = useSettingsStore((s) => s.backgroundImage);
-  const bgOpacity = useSettingsStore((s) => s.backgroundOpacity);
+  const { bgName, bgOpacity } = useSettingsStore(
+    useShallow((s) => ({
+      bgName: s.backgroundImage,
+      bgOpacity: s.backgroundOpacity,
+    })),
+  );
 
   const bgUrl = bgName ? getWallpaperUrl(bgName) : null;
   if (!bgUrl) return null;
@@ -180,6 +200,12 @@ const isInputEl = (el: EventTarget | null) =>
 export const AppShell = React.memo(() => {
   const [queueOpen, setQueueOpen] = useState(false);
   const [kbOpen, setKbOpen] = useState(false);
+  const lyricsOpen = useLyricsStore((s) => s.open);
+  const volumeHoldRef = useRef<{ key: string | null; repeatCount: number; lastAt: number }>({
+    key: null,
+    repeatCount: 0,
+    lastAt: 0,
+  });
   const onQueueToggle = useCallback(() => setQueueOpen((v) => !v), []);
   const onQueueClose = useCallback(() => setQueueOpen(false), []);
   const navigate = useNavigate();
@@ -229,13 +255,23 @@ export const AppShell = React.memo(() => {
           seek(Math.max(getCurrentTime() - 5, 0));
           break;
         case 'ArrowUp':
+        case 'ArrowDown': {
           e.preventDefault();
-          player.setVolume(usePlayerStore.getState().volume + 5);
+          const now = performance.now();
+          const hold = volumeHoldRef.current;
+          const sameKeyHold = e.repeat && hold.key === code && now - hold.lastAt < 250;
+          const repeatCount = sameKeyHold ? hold.repeatCount + 1 : 0;
+          volumeHoldRef.current = {
+            key: code,
+            repeatCount,
+            lastAt: now,
+          };
+
+          const direction = code === 'ArrowUp' ? 1 : -1;
+          const step = getVolumeStep(repeatCount);
+          player.setVolume(usePlayerStore.getState().volume + direction * step);
           break;
-        case 'ArrowDown':
-          e.preventDefault();
-          player.setVolume(usePlayerStore.getState().volume - 5);
-          break;
+        }
         case 'KeyM': {
           const { volume, volumeBeforeMute } = usePlayerStore.getState();
           player.setVolume(volume > 0 ? 0 : volumeBeforeMute);
@@ -273,8 +309,18 @@ export const AppShell = React.memo(() => {
       }
     };
 
+    const resetVolumeHold = (e: KeyboardEvent) => {
+      if (e.code === 'ArrowUp' || e.code === 'ArrowDown') {
+        volumeHoldRef.current = { key: null, repeatCount: 0, lastAt: 0 };
+      }
+    };
+
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener('keyup', resetVolumeHold);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      window.removeEventListener('keyup', resetVolumeHold);
+    };
   }, [navigate, queueOpen, kbOpen]);
 
   return (
@@ -289,9 +335,19 @@ export const AppShell = React.memo(() => {
         </main>
       </div>
       <NowPlayingBar onQueueToggle={onQueueToggle} queueOpen={queueOpen} />
-      <QueuePanel open={queueOpen} onClose={onQueueClose} />
-      <LyricsPanel />
-      <ArtworkPanel />
+      {queueOpen && (
+        <Suspense fallback={null}>
+          <QueuePanel open={queueOpen} onClose={onQueueClose} />
+        </Suspense>
+      )}
+      {lyricsOpen && (
+        <Suspense fallback={null}>
+          <LyricsPanel />
+        </Suspense>
+      )}
+      <Suspense fallback={null}>
+        <ArtworkPanel />
+      </Suspense>
       <KeybindingsDialog open={kbOpen} onOpenChange={setKbOpen} />
     </div>
   );

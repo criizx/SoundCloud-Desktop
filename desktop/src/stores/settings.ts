@@ -3,6 +3,13 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { tauriStorage } from '../lib/tauri-storage';
 
 export type ThemePreset = 'soundcloud' | 'dark' | 'neon' | 'forest' | 'crimson' | 'custom';
+export type StartupPage = 'home' | 'search' | 'library' | 'settings';
+export type DiscordRpcMode = 'track' | 'artist' | 'activity';
+export interface SidebarPinnedPlaylist {
+  urn: string;
+  title: string;
+  artworkUrl: string | null;
+}
 
 export interface ThemePresetDef {
   accent: string;
@@ -52,25 +59,40 @@ export interface SettingsState {
   backgroundImage: string;
   backgroundOpacity: number;
   glassBlur: number;
+  audioCacheLimitMB: number;
   language: string;
   eqEnabled: boolean;
   eqGains: number[];
   eqPreset: string;
+  normalizeVolume: boolean;
   sidebarCollapsed: boolean;
   floatingComments: boolean;
+  startupPage: StartupPage;
+  pinnedPlaylists: SidebarPinnedPlaylist[];
+  discordRpcEnabled: boolean;
+  discordRpcMode: DiscordRpcMode;
+  discordRpcShowButton: boolean;
   setAccentColor: (color: string) => void;
   setBgPrimary: (bg: string) => void;
   setThemePreset: (id: ThemePreset) => void;
   setBackgroundImage: (url: string) => void;
   setBackgroundOpacity: (opacity: number) => void;
   setGlassBlur: (blur: number) => void;
+  setAudioCacheLimitMB: (limit: number) => void;
   setLanguage: (lang: string) => void;
   setEqEnabled: (enabled: boolean) => void;
   setEqGains: (gains: number[]) => void;
   setEqPreset: (preset: string) => void;
   setEqBand: (index: number, gain: number) => void;
+  setNormalizeVolume: (enabled: boolean) => void;
   toggleSidebar: () => void;
   setFloatingComments: (v: boolean) => void;
+  setStartupPage: (page: StartupPage) => void;
+  pinPlaylist: (playlist: SidebarPinnedPlaylist) => void;
+  unpinPlaylist: (urn: string) => void;
+  setDiscordRpcEnabled: (enabled: boolean) => void;
+  setDiscordRpcMode: (mode: DiscordRpcMode) => void;
+  setDiscordRpcShowButton: (show: boolean) => void;
   resetTheme: () => void;
 }
 
@@ -83,12 +105,19 @@ const DEFAULTS = {
   backgroundImage: '',
   backgroundOpacity: 0.15,
   glassBlur: 40,
+  audioCacheLimitMB: 1024,
   language: navigator.language?.split('-')[0] || 'en',
   eqEnabled: false,
   eqGains: DEFAULT_EQ_GAINS,
   eqPreset: 'flat',
+  normalizeVolume: true,
   sidebarCollapsed: false,
   floatingComments: true,
+  startupPage: 'home' as StartupPage,
+  pinnedPlaylists: [] as SidebarPinnedPlaylist[],
+  discordRpcEnabled: true,
+  discordRpcMode: 'track' as DiscordRpcMode,
+  discordRpcShowButton: true,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -108,6 +137,7 @@ export const useSettingsStore = create<SettingsState>()(
       setBackgroundImage: (backgroundImage) => set({ backgroundImage }),
       setBackgroundOpacity: (backgroundOpacity) => set({ backgroundOpacity }),
       setGlassBlur: (glassBlur) => set({ glassBlur }),
+      setAudioCacheLimitMB: (audioCacheLimitMB) => set({ audioCacheLimitMB }),
       setLanguage: (language) => set({ language }),
       setEqEnabled: (eqEnabled) => set({ eqEnabled }),
       setEqGains: (eqGains) => set({ eqGains, eqPreset: 'custom' }),
@@ -118,14 +148,43 @@ export const useSettingsStore = create<SettingsState>()(
           eqGains[index] = gain;
           return { eqGains, eqPreset: 'custom' };
         }),
+      setNormalizeVolume: (normalizeVolume) => set({ normalizeVolume }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setFloatingComments: (floatingComments) => set({ floatingComments }),
-      resetTheme: () => set(DEFAULTS),
+      setStartupPage: (startupPage) => set({ startupPage }),
+      pinPlaylist: (playlist) =>
+        set((s) => ({
+          pinnedPlaylists: [
+            playlist,
+            ...s.pinnedPlaylists.filter((item) => item.urn !== playlist.urn),
+          ].slice(0, 8),
+        })),
+      unpinPlaylist: (urn) =>
+        set((s) => ({
+          pinnedPlaylists: s.pinnedPlaylists.filter((item) => item.urn !== urn),
+        })),
+      setDiscordRpcEnabled: (discordRpcEnabled) => set({ discordRpcEnabled }),
+      setDiscordRpcMode: (discordRpcMode) => set({ discordRpcMode }),
+      setDiscordRpcShowButton: (discordRpcShowButton) => set({ discordRpcShowButton }),
+      resetTheme: () =>
+        set({
+          accentColor: DEFAULTS.accentColor,
+          bgPrimary: DEFAULTS.bgPrimary,
+          themePreset: DEFAULTS.themePreset,
+          backgroundImage: DEFAULTS.backgroundImage,
+          backgroundOpacity: DEFAULTS.backgroundOpacity,
+          glassBlur: DEFAULTS.glassBlur,
+        }),
     }),
     {
       name: 'sc-settings',
       storage: createJSONStorage(() => tauriStorage),
-      version: 4,
+      version: 7,
+      migrate: (persistedState) =>
+        ({
+          ...DEFAULTS,
+          ...(persistedState as Partial<SettingsState>),
+        }) as SettingsState,
       partialize: (s) => ({
         accentColor: s.accentColor,
         bgPrimary: s.bgPrimary,
@@ -133,12 +192,19 @@ export const useSettingsStore = create<SettingsState>()(
         backgroundImage: s.backgroundImage,
         backgroundOpacity: s.backgroundOpacity,
         glassBlur: s.glassBlur,
+        audioCacheLimitMB: s.audioCacheLimitMB,
         language: s.language,
         eqEnabled: s.eqEnabled,
         eqGains: s.eqGains,
         eqPreset: s.eqPreset,
+        normalizeVolume: s.normalizeVolume,
         sidebarCollapsed: s.sidebarCollapsed,
         floatingComments: s.floatingComments,
+        startupPage: s.startupPage,
+        pinnedPlaylists: s.pinnedPlaylists,
+        discordRpcEnabled: s.discordRpcEnabled,
+        discordRpcMode: s.discordRpcMode,
+        discordRpcShowButton: s.discordRpcShowButton,
       }),
     },
   ),

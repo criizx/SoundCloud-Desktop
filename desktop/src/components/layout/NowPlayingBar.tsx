@@ -98,8 +98,9 @@ export const ProgressSlider = React.memo(() => {
 /* ── Volume Slider ───────────────────────────────────────────── */
 
 const VolumeSlider = React.memo(({ className = '' }: { className?: string }) => {
-  const volume = usePlayerStore((s) => s.volume);
-  const setVolume = usePlayerStore((s) => s.setVolume);
+  const { volume, setVolume } = usePlayerStore(
+    useShallow((s) => ({ volume: s.volume, setVolume: s.setVolume })),
+  );
   const isOver100 = volume > 100;
 
   return (
@@ -111,12 +112,19 @@ const VolumeSlider = React.memo(({ className = '' }: { className?: string }) => 
         step={1}
         onValueChange={([v]) => setVolume(v)}
         onKeyDown={(e) => {
-          // Prevent slider from reacting to Left/Right, let event bubble to global binds
-          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') e.preventDefault();
+          // Prevent slider from handling arrows itself, otherwise it stacks with global hotkeys.
+          if (
+            e.key === 'ArrowLeft' ||
+            e.key === 'ArrowRight' ||
+            e.key === 'ArrowUp' ||
+            e.key === 'ArrowDown'
+          ) {
+            e.preventDefault();
+          }
         }}
         onWheel={(e) => {
           e.preventDefault();
-          setVolume(Math.max(0, Math.min(200, volume + (e.deltaY < 0 ? 2 : -2))));
+          setVolume(Math.max(0, Math.min(200, volume + (e.deltaY < 0 ? 1 : -1))));
         }}
       >
         <Slider.Track className="relative h-[3px] grow rounded-full bg-white/[0.08] group-hover:h-[4px] transition-all duration-150">
@@ -140,9 +148,13 @@ const VolumeSlider = React.memo(({ className = '' }: { className?: string }) => 
 /* ── Volume button ───────────────────────────────────────────── */
 
 const ControlVolumeBtn = React.memo(({ size = 'default' }: { size?: 'default' | 'sm' }) => {
-  const volume = usePlayerStore((s) => s.volume);
-  const volumeBeforeMute = usePlayerStore((s) => s.volumeBeforeMute);
-  const setVolume = usePlayerStore((s) => s.setVolume);
+  const { volume, volumeBeforeMute, setVolume } = usePlayerStore(
+    useShallow((s) => ({
+      volume: s.volume,
+      volumeBeforeMute: s.volumeBeforeMute,
+      setVolume: s.setVolume,
+    })),
+  );
   const s = size === 'sm' ? 'w-9 h-9' : 'w-10 h-10';
   return (
     <button
@@ -204,10 +216,11 @@ function LikeButton({ trackUrn }: { trackUrn: string }) {
   const [liked, setLiked] = useState<boolean | null>(null);
   const prevUrn = useRef(trackUrn);
 
-  if (prevUrn.current !== trackUrn) {
+  useEffect(() => {
+    if (prevUrn.current === trackUrn) return;
     prevUrn.current = trackUrn;
     setLiked(null);
-  }
+  }, [trackUrn]);
 
   const isLiked = liked ?? trackData?.user_favorite ?? false;
 
