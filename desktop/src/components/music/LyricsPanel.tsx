@@ -1,10 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/shallow';
-import { artworkPanelApi } from './artworkPanelApi';
 import { api } from '../../lib/api';
 import { handlePrev, seek } from '../../lib/audio';
 import { art } from '../../lib/formatters';
@@ -14,8 +13,8 @@ import {
   ListPlus,
   Loader2,
   MicVocal,
-  pauseBlack18,
-  playBlack18,
+  Pause,
+  Play,
   repeat1Icon16,
   repeatIcon16,
   SkipBack,
@@ -30,6 +29,7 @@ import { useLyricsStore } from '../../stores/lyrics';
 import { type Track, usePlayerStore } from '../../stores/player';
 import { ProgressSlider, ProgressTime } from '../layout/NowPlayingBar';
 import { AddToPlaylistDialog } from './AddToPlaylistDialog';
+import { artworkPanelApi } from './artworkPanelApi';
 import { FloatingComments } from './FloatingComments';
 
 /* ── Color extraction ──────────────────────────────────────── */
@@ -65,29 +65,91 @@ function extractColor(src: string): Promise<[number, number, number]> {
   });
 }
 
-/* ── Shared: dynamic background ───────────────────────────── */
+function useArtworkColor(artworkUrl: string | null) {
+  const colorRef = useRef<[number, number, number]>([255, 85, 0]);
+  const prevArtRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const src = art(artworkUrl, 't200x200');
+    if (!src || src === prevArtRef.current) return;
+    prevArtRef.current = src;
+    extractColor(src).then((c) => {
+      colorRef.current = c;
+    });
+  }, [artworkUrl]);
+
+  return colorRef;
+}
+
+/* ── Background ────────────────────────────────────────────── */
 
 const FullscreenBackground = React.memo(
-  ({ artworkSrc, color }: { artworkSrc: string | null; color: [number, number, number] }) => {
+  ({
+    artworkSrc,
+    color,
+    isPlaying,
+  }: {
+    artworkSrc: string | null;
+    color: [number, number, number];
+    isPlaying: boolean;
+  }) => {
+    const [current, setCurrent] = useState(artworkSrc);
+    const [prev, setPrev] = useState<string | null>(null);
+    const [loaded, setLoaded] = useState(false);
     const [r, g, b] = color;
+
+    useEffect(() => {
+      if (artworkSrc === current) return;
+      setPrev(current);
+      setCurrent(artworkSrc);
+      setLoaded(false);
+    }, [artworkSrc, current]);
+
+    const bgStyle: React.CSSProperties = {
+      position: 'absolute',
+      inset: '-20%',
+      width: '140%',
+      height: '140%',
+      objectFit: 'cover',
+      filter: 'blur(70px) saturate(3.5) brightness(0.35)',
+      willChange: 'transform',
+      transition: 'opacity 0.8s ease',
+    };
+
+    const cls = isPlaying ? 'fs-bg-playing' : 'fs-bg-paused';
+
     return (
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute inset-0 overflow-hidden pointer-events-none"
         style={{ contain: 'strict', transform: 'translateZ(0)' }}
       >
-        {artworkSrc && (
+        {prev && (
           <img
-            src={artworkSrc}
+            key={prev}
+            src={prev}
             alt=""
-            className="w-full h-full object-cover scale-[1.4] blur-[100px] opacity-25 saturate-[1.5]"
+            className={cls}
+            style={{ ...bgStyle, opacity: loaded ? 0 : 1 }}
           />
         )}
+        {current && (
+          <img
+            key={current}
+            src={current}
+            alt=""
+            className={cls}
+            style={{ ...bgStyle, opacity: loaded ? 1 : 0 }}
+            onLoad={() => setLoaded(true)}
+          />
+        )}
+        <div className="absolute inset-0 bg-black/30" />
         <div
           className="absolute inset-0"
           style={{
             background: `
-              radial-gradient(ellipse at 25% 50%, rgba(${r},${g},${b},0.2) 0%, transparent 60%),
-              radial-gradient(ellipse at 75% 70%, rgba(${r},${g},${b},0.12) 0%, transparent 50%)
+              radial-gradient(ellipse at 25% 50%, rgba(${r},${g},${b},0.18) 0%, transparent 60%),
+              radial-gradient(ellipse at 75% 70%, rgba(${r},${g},${b},0.10) 0%, transparent 50%),
+              radial-gradient(ellipse at center, transparent 25%, rgba(0,0,0,0.55) 100%)
             `,
           }}
         />
@@ -96,7 +158,7 @@ const FullscreenBackground = React.memo(
   },
 );
 
-/* ── Shared: like button (for fullscreen panels) ──────────── */
+/* ── Like button ───────────────────────────────────────────── */
 
 const FullscreenLikeButton = React.memo(({ track }: { track: Track }) => {
   const liked = useLiked(track.urn);
@@ -119,8 +181,8 @@ const FullscreenLikeButton = React.memo(({ track }: { track: Track }) => {
     <button
       type="button"
       onClick={toggle}
-      className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer hover:bg-white/[0.06] ${
-        liked ? 'text-accent' : 'text-white/30 hover:text-white/60'
+      className={`flex items-center justify-center transition-colors duration-200 cursor-pointer ${
+        liked ? 'text-white' : 'text-white/30 hover:text-white/60'
       }`}
     >
       <Heart size={20} fill={liked ? 'currentColor' : 'none'} />
@@ -128,7 +190,7 @@ const FullscreenLikeButton = React.memo(({ track }: { track: Track }) => {
   );
 });
 
-/* ── Shared: transport controls + like ────────────────────── */
+/* ── Controls ──────────────────────────────────────────────── */
 
 const Controls = React.memo(({ track }: { track: Track }) => {
   const { isPlaying, next, repeat, shuffle, togglePlay, toggleRepeat, toggleShuffle } =
@@ -144,47 +206,35 @@ const Controls = React.memo(({ track }: { track: Track }) => {
       })),
     );
 
-  const ctrl =
-    'w-10 h-10 rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer hover:bg-white/[0.06]';
-  const small =
-    'w-9 h-9 rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer hover:bg-white/[0.06]';
+  const secondary = (active: boolean) =>
+    `flex items-center justify-center transition-colors duration-150 cursor-pointer ${
+      active ? 'text-white' : 'text-white/35 hover:text-white/70'
+    }`;
 
   return (
-    <div className="flex items-center justify-center gap-3">
+    <div className="flex items-center justify-between w-full">
       <FullscreenLikeButton track={track} />
-      <button
-        type="button"
-        onClick={toggleShuffle}
-        className={`${small} ${shuffle ? 'text-accent' : 'text-white/35 hover:text-white/60'}`}
-      >
+      <button type="button" onClick={toggleShuffle} className={secondary(shuffle)}>
         {shuffleIcon16}
       </button>
-      <button
-        type="button"
-        onClick={handlePrev}
-        className={`${ctrl} text-white/60 hover:text-white`}
-      >
-        <SkipBack size={20} fill="currentColor" />
+      <button type="button" onClick={handlePrev} className={secondary(false)}>
+        <SkipBack size={26} fill="currentColor" />
       </button>
-      <button
-        type="button"
-        onClick={togglePlay}
-        className="w-14 h-14 rounded-full bg-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer shadow-lg"
-      >
-        {isPlaying ? pauseBlack18 : playBlack18}
+      <button type="button" onClick={togglePlay} className={secondary(false)}>
+        {isPlaying ? (
+          <Pause size={30} fill="currentColor" />
+        ) : (
+          <Play size={30} fill="currentColor" className="ml-0.5" />
+        )}
       </button>
-      <button type="button" onClick={next} className={`${ctrl} text-white/60 hover:text-white`}>
-        <SkipForward size={20} fill="currentColor" />
+      <button type="button" onClick={next} className={secondary(false)}>
+        <SkipForward size={26} fill="currentColor" />
       </button>
-      <button
-        type="button"
-        onClick={toggleRepeat}
-        className={`${small} ${repeat !== 'off' ? 'text-accent' : 'text-white/35 hover:text-white/60'}`}
-      >
+      <button type="button" onClick={toggleRepeat} className={secondary(repeat !== 'off')}>
         {repeat === 'one' ? repeat1Icon16 : repeatIcon16}
       </button>
       <AddToPlaylistDialog trackUrns={[track.urn]}>
-        <button type="button" className={`${small} text-white/30 hover:text-white/60`}>
+        <button type="button" className={secondary(false)}>
           <ListPlus size={20} />
         </button>
       </AddToPlaylistDialog>
@@ -192,61 +242,70 @@ const Controls = React.memo(({ track }: { track: Track }) => {
   );
 });
 
-/* ── Shared: artwork + info + slider + controls column ────── */
+/* ── Track column ──────────────────────────────────────────── */
 
-const TrackColumn = React.memo(({ track, maxArt }: { track: Track; maxArt?: string }) => {
+const TrackColumn = React.memo(({ track, size = 360 }: { track: Track; size?: number }) => {
+  const { t } = useTranslation();
   const artwork500 = art(track.artwork_url, 't500x500');
 
   return (
-    <div className="flex flex-col items-center justify-center gap-5 px-12">
+    <div className="flex flex-col items-center justify-center gap-4 px-12">
       <div
-        className={`w-full ${maxArt ?? 'max-w-[360px]'} aspect-square rounded-2xl overflow-hidden shadow-2xl shadow-black/60 ring-1 ring-white/[0.08]`}
+        className="rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] ring-1 ring-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] shrink-0"
+        style={{ width: size, height: size }}
       >
         {artwork500 ? (
           <img src={artwork500} alt="" className="w-full h-full object-cover" decoding="async" />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-white/[0.06] to-white/[0.02] flex items-center justify-center">
+          <div className="w-full h-full flex items-center justify-center">
             <MicVocal size={48} className="text-white/10" />
           </div>
         )}
       </div>
 
-      <div className={`w-full ${maxArt ?? 'max-w-[360px]'} text-center space-y-1`}>
-        <p className="text-[18px] font-bold text-white/95 truncate">{track.title}</p>
-        <p className="text-[14px] text-white/40 truncate">{track.user.username}</p>
-      </div>
-
-      <div className={`w-full ${maxArt ?? 'max-w-[360px]'}`}>
-        <ProgressSlider />
-        <div className="flex justify-center mt-1">
-          <ProgressTime />
+      <div className="flex items-center gap-2" style={{ width: size }}>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="text-[15px] font-semibold text-white truncate leading-snug">
+              {track.title}
+            </p>
+            {track.access === 'preview' && (
+              <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide bg-amber-500/20 text-amber-400/90 px-1.5 py-px rounded">
+                {t('track.preview')}
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-white/40 truncate mt-0.5">{track.user.username}</p>
         </div>
       </div>
 
-      <Controls track={track} />
+      <div className="flex flex-col gap-0.5" style={{ width: size }}>
+        <ProgressSlider />
+        <ProgressTime />
+      </div>
+
+      <div style={{ width: size }}>
+        <Controls track={track} />
+      </div>
     </div>
   );
 });
 
-/* ── Shared: color hook ───────────────────────────────────── */
+/* ── Close button ──────────────────────────────────────────── */
 
-function useArtworkColor(artworkUrl: string | null) {
-  const colorRef = useRef<[number, number, number]>([255, 85, 0]);
-  const prevArtRef = useRef<string | null>(null);
+const CloseBtn = React.memo(({ onClick }: { onClick: () => void }) => (
+  <div className="relative z-10 flex justify-end px-6 pt-5 pb-2" data-tauri-drag-region>
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-9 h-9 rounded-full flex items-center justify-center text-white/25 hover:text-white/70 hover:bg-white/[0.08] transition-all duration-200 cursor-pointer"
+    >
+      <X size={18} />
+    </button>
+  </div>
+));
 
-  useEffect(() => {
-    const src = art(artworkUrl, 't200x200');
-    if (!src || src === prevArtRef.current) return;
-    prevArtRef.current = src;
-    extractColor(src).then((c) => {
-      colorRef.current = c;
-    });
-  }, [artworkUrl]);
-
-  return colorRef;
-}
-
-/* ── Synced Lyrics — CSS data-state + DOM scroll, 0 re-renders */
+/* ── Synced Lyrics ─────────────────────────────────────────── */
 
 const SyncedLyrics = React.memo(({ lines }: { lines: LyricLine[] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -255,7 +314,6 @@ const SyncedLyrics = React.memo(({ lines }: { lines: LyricLine[] }) => {
   const lineElsRef = useRef<HTMLElement[]>([]);
   linesRef.current = lines;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: lines triggers DOM re-cache
   useEffect(() => {
     const container = containerRef.current;
     if (container) {
@@ -280,14 +338,12 @@ const SyncedLyrics = React.memo(({ lines }: { lines: LyricLine[] }) => {
       if (prev >= 0 && prev < lineEls.length) {
         lineEls[prev].dataset.state = prev < idx ? 'past' : '';
       }
-
       if (idx >= 0 && idx < lineEls.length) {
         lineEls[idx].dataset.state = 'active';
         const el = lineEls[idx];
         const top = el.offsetTop - container.clientHeight / 2 + el.clientHeight / 2;
         container.scrollTo({ top, behavior: 'smooth' });
       }
-
       if (prev !== -1 && idx !== -1) {
         const lo = Math.min(prev, idx);
         const hi = Math.max(prev, idx);
@@ -336,14 +392,56 @@ const PlainLyrics = React.memo(({ text }: { text: string }) => (
   </div>
 ));
 
-/* ── Lyrics Panel (fullscreen, 50/50) ─────────────────────── */
+/* ── Shared panel wrapper ──────────────────────────────────── */
+
+const PanelShell = React.memo(
+  ({
+    artworkUrl,
+    isPlaying,
+    onClose,
+    children,
+  }: {
+    artworkUrl: string | null;
+    isPlaying: boolean;
+    onClose: () => void;
+    children: React.ReactNode;
+  }) => {
+    const colorRef = useArtworkColor(artworkUrl);
+    const artworkBg = art(artworkUrl, 't200x200');
+
+    useEffect(() => {
+      const handler = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') onClose();
+      };
+      window.addEventListener('keydown', handler);
+      return () => window.removeEventListener('keydown', handler);
+    }, [onClose]);
+
+    return (
+      <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden animate-fade-in-up bg-[#08080a]">
+        <FullscreenBackground
+          artworkSrc={artworkBg}
+          color={colorRef.current}
+          isPlaying={isPlaying}
+        />
+        <CloseBtn onClick={onClose} />
+        <div className="relative z-10 flex-1 min-h-0" style={{ isolation: 'isolate' }}>
+          {children}
+        </div>
+        <FloatingComments />
+      </div>
+    );
+  },
+);
+
+/* ── Lyrics Panel ──────────────────────────────────────────── */
 
 export const LyricsPanel = React.memo(() => {
   const open = useLyricsStore((s) => s.open);
   const close = useLyricsStore((s) => s.close);
   const track = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const { t } = useTranslation();
-  const colorRef = useArtworkColor(track?.artwork_url ?? null);
 
   const { data: lyrics, isLoading } = useQuery({
     queryKey: ['lyrics', track?.user.username, track?.title],
@@ -353,45 +451,13 @@ export const LyricsPanel = React.memo(() => {
     retry: 1,
   });
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open, close]);
-
   if (!open || !track) return null;
 
-  const artwork500 = art(track.artwork_url, 't500x500');
-
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden animate-fade-in-up bg-[#08080a]">
-      <FullscreenBackground artworkSrc={artwork500} color={colorRef.current} />
-
-      {/* Close */}
-      <div className="relative z-10 flex justify-end px-6 pt-5 pb-2" data-tauri-drag-region>
-        <button
-          type="button"
-          onClick={close}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-white/25 hover:text-white/70 hover:bg-white/[0.08] transition-all duration-200 cursor-pointer"
-        >
-          <X size={18} />
-        </button>
-      </div>
-
-      {/* 50/50 */}
-      <div
-        className="relative z-10 grid grid-cols-2 flex-1 min-h-0"
-        style={{ isolation: 'isolate' }}
-      >
+    <PanelShell artworkUrl={track.artwork_url} isPlaying={isPlaying} onClose={close}>
+      <div className="grid grid-cols-2 h-full">
         <TrackColumn track={track} />
-
-        {/* Divider */}
         <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/[0.04]" />
-
-        {/* Right: lyrics */}
         <div className="min-h-0 flex flex-col">
           {isLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3">
@@ -413,29 +479,17 @@ export const LyricsPanel = React.memo(() => {
           )}
         </div>
       </div>
-
-      <FloatingComments />
-    </div>
+    </PanelShell>
   );
 });
 
-/* ── Artwork Fullscreen Panel ─────────────────────────────── */
+/* ── Artwork Panel ─────────────────────────────────────────── */
 
 export const ArtworkPanel = React.memo(() => {
   const [open, setOpen] = useState(false);
   const track = usePlayerStore((s) => s.currentTrack);
-  const colorRef = useArtworkColor(track?.artwork_url ?? null);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open]);
-
-  // Expose open/close
   useEffect(() => {
     artworkPanelApi.open = () => setOpen(true);
     artworkPanelApi.close = () => setOpen(false);
@@ -443,34 +497,11 @@ export const ArtworkPanel = React.memo(() => {
 
   if (!open || !track) return null;
 
-  const artwork500 = art(track.artwork_url, 't500x500');
-
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden animate-fade-in-up bg-[#08080a]">
-      <FullscreenBackground artworkSrc={artwork500} color={colorRef.current} />
-
-      {/* Close */}
-      <div className="relative z-10 flex justify-end px-6 pt-5 pb-2" data-tauri-drag-region>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-white/25 hover:text-white/70 hover:bg-white/[0.08] transition-all duration-200 cursor-pointer"
-        >
-          <X size={18} />
-        </button>
+    <PanelShell artworkUrl={track.artwork_url} isPlaying={isPlaying} onClose={() => setOpen(false)}>
+      <div className="flex items-center justify-center h-full">
+        <TrackColumn track={track} size={420} />
       </div>
-
-      {/* Centered single column */}
-      <div
-        className="relative z-10 flex-1 flex items-center justify-center min-h-0"
-        style={{ isolation: 'isolate' }}
-      >
-        <TrackColumn track={track} maxArt="max-w-[420px]" />
-      </div>
-
-      <FloatingComments />
-    </div>
+    </PanelShell>
   );
 });
-
-/** Imperative API so NowPlayingBar can open without prop drilling */

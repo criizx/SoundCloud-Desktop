@@ -2,11 +2,12 @@ import * as Slider from '@radix-ui/react-slider';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useShallow } from 'zustand/shallow';
 import { api } from '../../lib/api';
 import { getCurrentTime, getDuration, handlePrev, seek, subscribe } from '../../lib/audio';
 import { art, formatTime } from '../../lib/formatters';
 import { invalidateAllLikesCache } from '../../lib/hooks';
-import { FullscreenPlayer } from '../music/FullscreenPlayer';
+import { artworkPanelApi } from '../music/artworkPanelApi';
 import {
   audioLines16,
   Heart,
@@ -342,7 +343,6 @@ const TrackInfo = React.memo(() => {
   const navigate = useNavigate();
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const artworkSmall = art(currentTrack?.artwork_url, 't200x200');
-  const [fsOpen, setFsOpen] = useState(false);
 
   if (!currentTrack) {
     return (
@@ -356,7 +356,7 @@ const TrackInfo = React.memo(() => {
     <div className="flex items-center gap-3.5 w-[280px] min-w-0">
       <div
         className="relative w-14 h-14 rounded-[10px] shrink-0 overflow-hidden cursor-pointer shadow-xl shadow-black/40 ring-1 ring-white/[0.06] hover:ring-white/[0.12] transition-all duration-200 group/art"
-        onClick={() => setFsOpen(true)}
+        onClick={() => artworkPanelApi.open()}
       >
         {artworkSmall ? (
           <img src={artworkSmall} alt="" className="w-full h-full object-cover" />
@@ -397,7 +397,6 @@ const TrackInfo = React.memo(() => {
         </p>
       </div>
       <LikeButton trackUrn={currentTrack.urn} />
-      <FullscreenPlayer open={fsOpen} onClose={() => setFsOpen(false)} />
     </div>
   );
 });
