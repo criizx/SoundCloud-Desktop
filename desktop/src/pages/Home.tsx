@@ -152,7 +152,7 @@ const FeaturedCard = React.memo(
 
     return (
       <div
-        className="relative rounded-3xl overflow-hidden group glass-featured"
+        className="relative rounded-3xl overflow-hidden group glass-featured select-none"
         onMouseEnter={() => preloadTrack(track.urn)}
       >
         {/* Blurred artwork background */}
@@ -297,7 +297,7 @@ const FeedTrackCard = React.memo(
 
     return (
       <div
-        className={`group glass-flat rounded-2xl p-3 flex items-center gap-3.5 transition-all duration-300 ease-[var(--ease-apple)] ${
+        className={`group glass-flat rounded-2xl p-3 flex items-center gap-3.5 transition-all duration-300 ease-[var(--ease-apple)] select-none ${
           isThis ? 'ring-1 ring-accent/20 bg-accent/[0.02]' : 'hover:bg-white/[0.035]'
         }`}
         onMouseEnter={() => preloadTrack(track.urn)}
@@ -411,8 +411,10 @@ const FeedPlaylistCard = React.memo(
     );
     const { isPausedFromThis, isPlayingFromThis } = usePlayerStore(
       useShallow((s) => ({
-        isPlayingFromThis: s.isPlaying && s.currentTrack != null && trackUrns.has(s.currentTrack.urn),
-        isPausedFromThis: !s.isPlaying && s.currentTrack != null && trackUrns.has(s.currentTrack.urn),
+        isPlayingFromThis:
+          s.isPlaying && s.currentTrack != null && trackUrns.has(s.currentTrack.urn),
+        isPausedFromThis:
+          !s.isPlaying && s.currentTrack != null && trackUrns.has(s.currentTrack.urn),
       })),
     );
 
@@ -451,7 +453,7 @@ const FeedPlaylistCard = React.memo(
 
     return (
       <div
-        className={`group glass-flat rounded-2xl p-3 flex items-center gap-3.5 transition-all duration-300 ease-[var(--ease-apple)] ${
+        className={`group glass-flat rounded-2xl p-3 flex items-center gap-3.5 transition-all duration-300 ease-[var(--ease-apple)] select-none ${
           isPlayingFromThis ? 'ring-1 ring-accent/20 bg-accent/[0.02]' : 'hover:bg-white/[0.035]'
         }`}
       >
@@ -854,7 +856,7 @@ export function Home() {
     <div className="p-6 pb-4 space-y-8">
       {/* Hero Greeting — no data hooks, won't re-render */}
       <section className="pt-1">
-        <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-white/80 to-accent/80 bg-clip-text text-transparent leading-tight pb-1">
+        <h1 className="hero-greeting text-3xl font-bold tracking-tight leading-tight pb-1">
           {t(greetingKey())}
           {user?.username ? `, ${user.username}` : ''}
         </h1>
