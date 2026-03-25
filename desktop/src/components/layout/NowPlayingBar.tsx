@@ -7,7 +7,6 @@ import { api } from '../../lib/api';
 import { getCurrentTime, getDuration, handlePrev, seek, subscribe } from '../../lib/audio';
 import { art, formatTime } from '../../lib/formatters';
 import { invalidateAllLikesCache } from '../../lib/hooks';
-import { artworkPanelApi } from '../music/artworkPanelApi';
 import {
   audioLines16,
   Heart,
@@ -161,9 +160,8 @@ const ControlVolumeBtn = React.memo(({ size = 'default' }: { size?: 'default' | 
     <button
       type="button"
       onClick={() => setVolume(volume > 0 ? 0 : volumeBeforeMute)}
-      className={`${s} rounded-full flex items-center justify-center transition-all duration-150 ease-[var(--ease-apple)] cursor-pointer hover:bg-white/[0.04] ${
-        volume === 0 ? 'text-accent' : 'text-white/40 hover:text-white/70'
-      }`}
+      className={`${s} rounded-full flex items-center justify-center transition-all duration-150 ease-[var(--ease-apple)] cursor-pointer hover:bg-white/[0.04] ${volume === 0 ? 'text-accent' : 'text-white/40 hover:text-white/70'
+        }`}
     >
       {volume === 0 ? volumeXIcon16 : volume < 50 ? volume1Icon16 : volume2Icon16}
     </button>
@@ -245,9 +243,8 @@ function LikeButton({ trackUrn }: { trackUrn: string }) {
     <button
       type="button"
       onClick={toggle}
-      className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 cursor-pointer hover:bg-white/[0.04] ${
-        isLiked ? 'text-accent' : 'text-white/30 hover:text-white/60'
-      }`}
+      className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 cursor-pointer hover:bg-white/[0.04] ${isLiked ? 'text-accent' : 'text-white/30 hover:text-white/60'
+        }`}
     >
       <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} />
     </button>
@@ -257,8 +254,7 @@ function LikeButton({ trackUrn }: { trackUrn: string }) {
 /* ── Isolated control buttons ────────────────────────────────── */
 
 const btnClass = (active: boolean, size: 'default' | 'sm') =>
-  `${size === 'sm' ? 'w-9 h-9' : 'w-10 h-10'} rounded-full flex items-center justify-center transition-all duration-150 ease-[var(--ease-apple)] cursor-pointer hover:bg-white/[0.04] ${
-    active ? 'text-accent' : 'text-white/40 hover:text-white/70'
+  `${size === 'sm' ? 'w-9 h-9' : 'w-10 h-10'} rounded-full flex items-center justify-center transition-all duration-150 ease-[var(--ease-apple)] cursor-pointer hover:bg-white/[0.04] ${active ? 'text-accent' : 'text-white/40 hover:text-white/70'
   }`;
 
 const PlayPauseBtn = React.memo(() => {

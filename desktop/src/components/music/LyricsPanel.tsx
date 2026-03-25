@@ -16,8 +16,6 @@ import {
   Pause,
   Play,
   MessageCircle,
-  pauseBlack18,
-  playBlack18,
   repeat1Icon16,
   repeatIcon16,
   SkipBack,
