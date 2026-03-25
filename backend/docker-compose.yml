@@ -34,6 +34,12 @@ services:
       SOUNDCLOUD_CLIENT_ID: ${SOUNDCLOUD_CLIENT_ID}
       SOUNDCLOUD_CLIENT_SECRET: ${SOUNDCLOUD_CLIENT_SECRET}
       SOUNDCLOUD_REDIRECT_URI: ${SOUNDCLOUD_REDIRECT_URI:-http://localhost:3000/auth/callback}
+      SC_PROXY_URL: ${SC_PROXY_URL:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      CDN_BASE_URL: ${CDN_BASE_URL:-}
+      CDN_AUTH_TOKEN: ${CDN_AUTH_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy
@@ -55,6 +61,12 @@ services:
       SOUNDCLOUD_CLIENT_ID: ${SOUNDCLOUD_CLIENT_ID}
       SOUNDCLOUD_CLIENT_SECRET: ${SOUNDCLOUD_CLIENT_SECRET}
       SOUNDCLOUD_REDIRECT_URI: ${SOUNDCLOUD_REDIRECT_URI:-http://localhost:3000/auth/callback}
+      SC_PROXY_URL: ${SC_PROXY_URL:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      CDN_BASE_URL: ${CDN_BASE_URL:-}
+      CDN_AUTH_TOKEN: ${CDN_AUTH_TOKEN:-}
     volumes:
       - ./src:/app/src
       - ./tsconfig.json:/app/tsconfig.json
