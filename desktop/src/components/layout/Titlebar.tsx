@@ -1,18 +1,17 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Disc3 } from '../../lib/icons';
+import { ChevronLeft, ChevronRight, Disc3, Minus, Square, X } from '../../lib/icons';
 
-const isMac = navigator.userAgent.includes('Mac');
+const isMac = navigator.userAgent.includes('Mac OS X') || navigator.platform.startsWith('Mac');
 
 const NavButtons = React.memo(() => {
   const navigate = useNavigate();
   const location = useLocation();
-  // track history length to enable/disable (basic heuristic)
   const canGoBack = location.key !== 'default';
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-0.5 ml-2">
       <button
         type="button"
         disabled={!canGoBack}
@@ -37,24 +36,75 @@ export const Titlebar = React.memo(() => {
 
   useEffect(() => {
     if (!isMac) return;
+
     const win = getCurrentWindow();
-    win.isFullscreen().then(setIsFullscreen);
-    const unlisten = win.onResized(() => {
+
+    const updateFullscreen = () => {
       win.isFullscreen().then(setIsFullscreen);
+    };
+
+    updateFullscreen();
+
+    let unlisten: (() => void) | undefined;
+    win.onResized(updateFullscreen).then((unl) => {
+      unlisten = unl;
     });
-    return () => { unlisten.then((fn) => fn()); };
+
+    return () => {
+      unlisten?.();
+    };
   }, []);
 
-  // On Windows/Linux the system titlebar is used (decorations: true),
-  // so we render nothing — the system handles window controls.
-  if (!isMac) return null;
+  // ====================== Windows / Linux ======================
+  if (!isMac) {
+    const minimize = () => getCurrentWindow().minimize();
+    const toggleMaximize = () => getCurrentWindow().toggleMaximize();
+    const close = () => getCurrentWindow().close();
 
+    return (
+      <div
+        className="h-10 flex items-center justify-between px-4 select-none shrink-0 border-b border-white/[0.04]"
+        data-tauri-drag-region
+      >
+        <div className="flex items-center gap-1.5" data-tauri-drag-region>
+          <Disc3 size={14} className="text-accent" strokeWidth={2} />
+          <span className="text-[11px] font-semibold tracking-tight text-white/30">SoundCloud</span>
+          <NavButtons />
+        </div>
+
+        <div className="flex items-center">
+          <button
+            type="button"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-white/50 hover:bg-white/[0.04] transition-all duration-150 cursor-pointer"
+            onClick={minimize}
+          >
+            <Minus size={13} />
+          </button>
+          <button
+            type="button"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-white/50 hover:bg-white/[0.04] transition-all duration-150 cursor-pointer"
+            onClick={toggleMaximize}
+          >
+            <Square size={10} />
+          </button>
+          <button
+            type="button"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 cursor-pointer"
+            onClick={close}
+          >
+            <X size={13} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ====================== macOS ======================
   return (
     <div
       className="h-10 flex items-center px-4 select-none shrink-0 border-b border-white/[0.04]"
       data-tauri-drag-region
     >
-      {/* spacer for macOS traffic lights — hidden in fullscreen */}
       {!isFullscreen && <div className="w-[70px] shrink-0" data-tauri-drag-region />}
 
       <div className="flex items-center gap-1.5">
@@ -65,7 +115,6 @@ export const Titlebar = React.memo(() => {
         </div>
       </div>
 
-      {/* fills remaining space — drag region */}
       <div className="flex-1 h-full" data-tauri-drag-region />
     </div>
   );
