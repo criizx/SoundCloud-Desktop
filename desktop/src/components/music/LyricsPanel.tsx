@@ -32,7 +32,6 @@ import { useLyricsStore } from '../../stores/lyrics';
 import { type Track, usePlayerStore } from '../../stores/player';
 import { ProgressSlider, ProgressTime } from '../layout/NowPlayingBar';
 import { AddToPlaylistDialog } from './AddToPlaylistDialog';
-import { artworkPanelApi } from './artworkPanelApi';
 import { FloatingComments } from './FloatingComments';
 
 /* ── Color extraction ──────────────────────────────────────── */
