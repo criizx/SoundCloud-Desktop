@@ -742,11 +742,6 @@ export const ArtworkPanel = React.memo(() => {
   const track = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
-  useEffect(() => {
-    artworkPanelApi.open = () => setOpen(true);
-    artworkPanelApi.close = () => setOpen(false);
-  }, []);
-
   if (!open || !track) return null;
 
   return (
