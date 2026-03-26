@@ -41,6 +41,10 @@ async function filePath(urn: string): Promise<string> {
   return await join(dir, urnToFilename(urn));
 }
 
+export async function getCacheTargetPath(urn: string): Promise<string> {
+  return await filePath(urn);
+}
+
 export async function isCached(urn: string): Promise<boolean> {
   try {
     const path = await filePath(urn);
@@ -87,7 +91,11 @@ export async function fetchAndCacheTrack(urn: string, signal?: AbortSignal): Pro
   const promise = (async () => {
     try {
       const sessionId = getSessionId();
-      const url = `${API_BASE}/tracks/${encodeURIComponent(urn)}/stream`;
+      const params = new URLSearchParams();
+      if (useSettingsStore.getState().highQualityStreaming) {
+        params.set('hq', 'true');
+      }
+      const url = `${API_BASE}/tracks/${encodeURIComponent(urn)}/stream${params.size ? `?${params.toString()}` : ''}`;
 
       const res = await tauriFetch(url, {
         headers: sessionId ? { 'x-session-id': sessionId } : {},

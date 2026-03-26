@@ -2,9 +2,14 @@ import { listen } from '@tauri-apps/api/event';
 import type { Track } from '../stores/player';
 import { usePlayerStore } from '../stores/player';
 import { useSettingsStore } from '../stores/settings';
-import { api, getSessionId } from './api';
-import { fetchAndCacheTrack, getCacheFilePath, isCached } from './cache';
-import { API_BASE } from './constants';
+import { api, getSessionId, streamUrl } from './api';
+import {
+  enforceAudioCacheLimit,
+  fetchAndCacheTrack,
+  getCacheFilePath,
+  getCacheTargetPath,
+  isCached,
+} from './cache';
 import { trackedInvoke as invoke } from './diagnostics';
 import { art } from './formatters';
 
@@ -110,16 +115,13 @@ async function loadTrack(track: Track) {
         cacheKey: urn,
       });
     } else {
-      const url = `${API_BASE}/tracks/${encodeURIComponent(urn)}/stream`;
-      const sessionId = getSessionId();
       await invoke<{ duration_secs: number | null }>('audio_load_url', {
-        url,
-        sessionId: sessionId || null,
-        cachePath: null,
+        url: streamUrl(urn),
+        sessionId: getSessionId(),
+        cachePath: await getCacheTargetPath(urn),
         cacheKey: urn,
       });
-      // Background cache for next time
-      fetchAndCacheTrack(urn).catch(() => {});
+      void enforceAudioCacheLimit().catch(console.error);
     }
   } catch (e) {
     console.error('[Audio] Load failed:', e);
@@ -338,6 +340,7 @@ async function autoplayRelated(lastTrack: Track) {
 /* ── Preloading ──────────────────────────────────────────────── */
 
 let preloadTimer: ReturnType<typeof setTimeout> | null = null;
+let preloadQueueTimer: ReturnType<typeof setTimeout> | null = null;
 const MAX_CONCURRENT_PRELOADS = 2;
 let activePreloads = 0;
 
@@ -368,3 +371,16 @@ export function preloadQueue() {
     }
   }
 }
+
+function schedulePreloadQueue() {
+  if (preloadQueueTimer) clearTimeout(preloadQueueTimer);
+  preloadQueueTimer = setTimeout(() => {
+    preloadQueue();
+  }, 150);
+}
+
+usePlayerStore.subscribe((state, prev) => {
+  if (state.queueIndex !== prev.queueIndex || state.queue !== prev.queue) {
+    schedulePreloadQueue();
+  }
+});
